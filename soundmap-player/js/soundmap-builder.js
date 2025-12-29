@@ -22,6 +22,9 @@ class SoundmapBuilder {
     this.masterVolume = 0.8;
     this.fadeRadius = 500;
     this.fadeSpeed = 0.3;
+    this.smoothness = 0.15; // Smoothness factor for interpolation (lower = smoother, 0.05-0.3 range)
+    // Initialize smoothness from fadeSpeed (inverse relationship - faster fade = less smooth)
+    this.updateSmoothnessFromFadeSpeed();
     
     // Spatial audio settings
     this.spatialAudioEnabled = true;
@@ -33,6 +36,10 @@ class SoundmapBuilder {
     this.nextSourceId = 1;
     this.pendingSource = null;
     this.selectedSource = null;
+    
+    // Animation loop for smooth fading
+    this.animationFrameId = null;
+    this.targetVolumes = new Map(); // Target volumes for each source (calculated from position)
   }
   
   async init() {
@@ -55,7 +62,7 @@ class SoundmapBuilder {
     }).setView(center, 15);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
+      attribution: 'ï¿½ OpenStreetMap',
       maxZoom: 19
     }).addTo(this.map);
     
@@ -103,11 +110,12 @@ class SoundmapBuilder {
       this.updateSourceRings();
     });
     
-    // Fade speed
+    // Fade speed (controls smoothness of interpolation)
     const fadeSpeedSlider = document.getElementById('fade-speed');
     fadeSpeedSlider.addEventListener('input', (e) => {
       this.fadeSpeed = parseFloat(e.target.value);
       document.getElementById('fade-speed-value').textContent = e.target.value + 's';
+      this.updateSmoothnessFromFadeSpeed();
     });
     
     // Reverb amount
@@ -426,9 +434,15 @@ class SoundmapBuilder {
     document.getElementById('play-btn').textContent = 'Stop Preview';
     document.getElementById('status').classList.remove('status-hidden');
     
-    this.audioSources.forEach((audioSource) => {
+    // Initialize target volumes
+    this.targetVolumes.clear();
+    this.audioSources.forEach((audioSource, id) => {
+      this.targetVolumes.set(id, 0);
       this.startAudioSource(audioSource);
     });
+    
+    // Start animation loop for smooth fading
+    this.startAnimationLoop();
     
     console.log('Preview started');
   }
@@ -437,12 +451,24 @@ class SoundmapBuilder {
     this.isPlaying = false;
     document.getElementById('play-btn').textContent = 'Preview';
     
+    // Stop animation loop
+    this.stopAnimationLoop();
+    
     this.audioSources.forEach((audioSource) => {
       if (audioSource.source) {
         audioSource.source.stop();
         audioSource.source = null;
       }
     });
+    
+    // Reset all gains to 0
+    this.audioSources.forEach((audioSource) => {
+      audioSource.currentGain = 0;
+      audioSource.gainNode.gain.cancelScheduledValues(this.audioContext.currentTime);
+      audioSource.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+    });
+    
+    this.targetVolumes.clear();
   }
   
   async initAudioContext() {
@@ -533,7 +559,8 @@ class SoundmapBuilder {
           source: null,
           panner: panner,
           gainNode: gainNode,
-          reverbSend: reverbSend
+          reverbSend: reverbSend,
+          currentGain: 0 // Track current gain value for smooth interpolation
         });
         
         console.log('Loaded:', source.id);
@@ -559,6 +586,7 @@ class SoundmapBuilder {
     
     const listenerPos = this.latLngToXYZ(lat, lng);
     
+    // Update listener position immediately for spatial audio
     if (this.audioContext.listener.positionX) {
       this.audioContext.listener.positionX.value = listenerPos.x;
       this.audioContext.listener.positionY.value = listenerPos.y;
@@ -566,9 +594,9 @@ class SoundmapBuilder {
     }
     
     let nearestDistance = Infinity;
-    const currentTime = this.audioContext.currentTime;
     
-    this.audioSources.forEach((audioSource) => {
+    // Calculate target volumes based on distance (don't update gains directly)
+    this.audioSources.forEach((audioSource, id) => {
       const sourcePos = audioSource.config.position;
       const distance = this.calculateDistance(lat, lng, sourcePos[0], sourcePos[1]);
       
@@ -586,33 +614,77 @@ class SoundmapBuilder {
         targetVolume = falloff * audioSource.config.audio.volume * this.masterVolume;
       }
       
-      // Prevent volume from going to exactly 0 (causes exponential ramp issues)
-      const safeVolume = Math.max(targetVolume, 0.0001);
-      
-      // Get current volume
-      const currentVolume = audioSource.gainNode.gain.value;
-      
-      // Use exponential ramp for smoother transitions
-      // Cancel any scheduled changes first
-      audioSource.gainNode.gain.cancelScheduledValues(currentTime);
-      audioSource.gainNode.gain.setValueAtTime(currentVolume, currentTime);
-      
-      // Exponential ramp to target (much smoother than linear)
-      try {
-        audioSource.gainNode.gain.exponentialRampToValueAtTime(
-          safeVolume,
-          currentTime + this.fadeSpeed
-        );
-      } catch (e) {
-        // Fallback to linear if exponential fails
-        audioSource.gainNode.gain.linearRampToValueAtTime(
-          safeVolume,
-          currentTime + this.fadeSpeed
-        );
-      }
+      // Store target volume - animation loop will smoothly interpolate to it
+      this.targetVolumes.set(id, targetVolume);
     });
     
     document.getElementById('distance-display').textContent = `${Math.round(nearestDistance)}m`;
+  }
+  
+  startAnimationLoop() {
+    if (this.animationFrameId) return;
+    
+    const updateAudio = () => {
+      if (!this.isPlaying) {
+        this.animationFrameId = null;
+        return;
+      }
+      
+      const currentTime = this.audioContext.currentTime;
+      
+      // Smoothly interpolate each source's gain toward its target volume
+      this.audioSources.forEach((audioSource, id) => {
+        const targetVolume = this.targetVolumes.get(id) || 0;
+        const currentGain = audioSource.currentGain;
+        
+        // Use exponential interpolation for ultra-smooth fading
+        // The smoothness factor controls how fast we approach the target (0.05-0.3)
+        // Lower values = smoother but slower response
+        // Higher values = faster response but potentially less smooth
+        
+        if (Math.abs(currentGain - targetVolume) < 0.001) {
+          // Already at target (or very close)
+          audioSource.currentGain = targetVolume;
+          audioSource.gainNode.gain.setValueAtTime(targetVolume, currentTime);
+        } else {
+          // Exponential interpolation toward target
+          // This creates buttery smooth transitions
+          const diff = targetVolume - currentGain;
+          let newGain = currentGain + (diff * this.smoothness);
+          
+          // Clamp to target to prevent overshoot/undershoot
+          if (targetVolume > currentGain && newGain > targetVolume) {
+            newGain = targetVolume;
+          } else if (targetVolume < currentGain && newGain < targetVolume) {
+            newGain = targetVolume;
+          }
+          
+          // Allow going to zero for sources far away
+          if (targetVolume === 0 && newGain < 0.001) {
+            newGain = 0;
+          }
+          
+          // Update tracked gain value
+          audioSource.currentGain = newGain;
+          
+          // Cancel any scheduled values and set new value immediately
+          // This ensures smooth continuous updates without scheduling conflicts
+          audioSource.gainNode.gain.cancelScheduledValues(currentTime);
+          audioSource.gainNode.gain.setValueAtTime(newGain, currentTime);
+        }
+      });
+      
+      this.animationFrameId = requestAnimationFrame(updateAudio);
+    };
+    
+    this.animationFrameId = requestAnimationFrame(updateAudio);
+  }
+  
+  stopAnimationLoop() {
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
   }
   
   latLngToXYZ(lat, lng) {
@@ -646,6 +718,15 @@ class SoundmapBuilder {
     if (this.masterGainNode) {
       this.masterGainNode.gain.value = this.masterVolume;
     }
+  }
+  
+  updateSmoothnessFromFadeSpeed() {
+    // Convert fade speed to smoothness factor
+    // Faster fade speed = less smooth (higher smoothness value)
+    // Slower fade speed = more smooth (lower smoothness value)
+    // Map fadeSpeed (0.05-1.0) to smoothness (0.05-0.3)
+    // Lower smoothness = smoother but slower response
+    this.smoothness = Math.max(0.05, Math.min(0.3, this.fadeSpeed * 0.3));
   }
   
   getRandomColor() {
