@@ -46,15 +46,30 @@
         <input type="text" id="source-name" placeholder="Source name">
         <input type="file" id="audio-file" accept="audio/*">
         <input type="number" id="max-distance" placeholder="Max distance (m)" value="500">
-        <button id="add-source" class="btn-secondary">Add to Map</button>
+        <button id="add-source" class="btn-secondary">Add Point Source</button>
         <p style="font-size: 11px; color: #666; margin-top: 8px;">
-          Click "Add to Map" then click on the map to place the source
+          Click "Add Point Source" then click on the map to place the source
+        </p>
+        
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #444;">
+        
+        <h3>Add Audio Path</h3>
+        <input type="text" id="path-name" placeholder="Path name">
+        <input type="file" id="path-audio-file" accept="audio/*">
+        <input type="number" id="path-proximity" placeholder="Proximity distance (m)" value="500">
+        <button id="add-path" class="btn-secondary">Start Drawing Path</button>
+        <button id="finish-path" class="btn-secondary" style="display: none; margin-top: 8px;">Finish Path</button>
+        <button id="cancel-path" class="btn-secondary" style="display: none; margin-top: 8px; background: #666;">Cancel</button>
+        <p style="font-size: 11px; color: #666; margin-top: 8px;">
+          Click "Start Drawing Path", then click on the map to add points. Double-click or click "Finish Path" to complete.
         </p>
       </div>
       
       <div id="sources-list" class="control-group">
         <h3>Audio Sources (<span id="source-count">0</span>)</h3>
         <div id="source-items"></div>
+        <h3 style="margin-top: 20px;">Audio Paths (<span id="path-count">0</span>)</h3>
+        <div id="path-items"></div>
       </div>
       
       <div id="status" class="control-group status-hidden">
@@ -108,7 +123,8 @@
     const defaultConfig = {
       title: "New Soundmap",
       mapCenter: [51.5074, -0.1278],
-      audioSources: []
+      audioSources: [],
+      audioPaths: []
     };
     
     soundmapBuilder = new SoundmapBuilder('map', defaultConfig);
