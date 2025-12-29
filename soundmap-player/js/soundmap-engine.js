@@ -1,6 +1,5 @@
 /**
- * JnfH Soundmap Audio Engine
- * Using native Web Audio API for better CORS compatibility
+ * JnfH Soundmap - Point Source Audio with Distance-based Mixing
  */
 
 class SoundmapPlayer {
@@ -8,79 +7,89 @@ class SoundmapPlayer {
     this.mapContainer = mapContainerId;
     this.config = config;
     this.audioContext = null;
-    this.activeTracks = new Map();
-    this.currentPosition = null;
+    this.audioSources = new Map();
+    this.listenerPosition = null;
     this.isPlaying = false;
     this.masterVolume = 0.8;
-    this.crossfadeDuration = 2;
-    this.mode = 'click';
-    
-    this.animationProgress = 0;
-    this.animationActive = false;
-    this.animationStartTime = null;
     
     this.map = null;
-    this.markers = {
-      listener: null,
-      zones: []
-    };
+    this.listenerMarker = null;
+    this.sourceMarkers = [];
   }
   
   async init() {
-    console.log('Initializing Soundmap Player...');
+    console.log('Initializing Point Source Player...');
     
     this.initMap();
     this.setupAudioContext();
     this.bindControls();
     
-    if (this.config.path) {
-      this.drawPath();
-    }
-    
-    console.log('Soundmap Player ready - click Start Audio to begin');
+    console.log('Ready - click Start Audio');
   }
   
   initMap() {
     const center = this.config.mapCenter || [51.5074, -0.1278];
     
-    this.map = L.map(this.mapContainer).setView(center, 13);
+    this.map = L.map(this.mapContainer).setView(center, 15);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
+      attribution: '© OpenStreetMap',
       maxZoom: 19
     }).addTo(this.map);
     
-    this.markers.listener = L.marker(center, {
+    // Listener marker (you)
+    this.listenerMarker = L.marker(center, {
       icon: L.divIcon({
         className: 'listener-marker',
         html: '<div class="pulse"></div>',
         iconSize: [30, 30]
       }),
-      draggable: this.mode === 'click'
+      draggable: true
     }).addTo(this.map);
     
-    this.markers.listener.on('dragend', (e) => {
+    this.listenerMarker.on('drag', (e) => {
       const pos = e.target.getLatLng();
       this.updateListenerPosition(pos.lat, pos.lng);
     });
     
+    // Click to move
     this.map.on('click', (e) => {
-      if (this.mode === 'click' && this.isPlaying) {
-        this.markers.listener.setLatLng(e.latlng);
+      if (this.isPlaying) {
+        this.listenerMarker.setLatLng(e.latlng);
         this.updateListenerPosition(e.latlng.lat, e.latlng.lng);
       }
+    });
+    
+    // Draw audio source points
+    this.drawAudioSources();
+  }
+  
+  drawAudioSources() {
+    const sources = this.config.audioSources || [];
+    
+    sources.forEach(source => {
+      const marker = L.circleMarker(source.position, {
+        radius: 10,
+        fillColor: source.color || '#FF6B6B',
+        color: '#fff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.8
+      }).addTo(this.map);
+      
+      marker.bindPopup(`<b>${source.name}</b><br>Audio source`);
+      
+      this.sourceMarkers.push(marker);
     });
   }
   
   setupAudioContext() {
     document.getElementById('play-btn').addEventListener('click', async () => {
       if (!this.audioContext) {
-        // Use native Web Audio API instead of Tone.js
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         console.log('Audio context started');
         
-        await this.loadAudioZones();
-        this.drawZones();
+        await this.loadAudioSources();
       }
       
       this.togglePlayback();
@@ -95,99 +104,49 @@ class SoundmapPlayer {
       volumeValue.textContent = e.target.value + '%';
       this.updateMasterVolume();
     });
-    
-    const crossfadeSlider = document.getElementById('crossfade-time');
-    const crossfadeValue = document.getElementById('crossfade-value');
-    crossfadeSlider.addEventListener('input', (e) => {
-      this.crossfadeDuration = parseFloat(e.target.value);
-      crossfadeValue.textContent = e.target.value + 's';
-    });
-    
-    const modeSelect = document.getElementById('mode-select');
-    modeSelect.addEventListener('change', (e) => {
-      this.changeMode(e.target.value);
-    });
   }
   
-  async loadAudioZones() {
-    const zones = this.config.audioZones || [];
+  async loadAudioSources() {
+    const sources = this.config.audioSources || [];
     
-    console.log('Loading audio zones...');
+    console.log('Loading audio sources...');
     
-    for (const zone of zones) {
+    for (const source of sources) {
       try {
-        console.log('Fetching audio:', zone.audio.url);
+        console.log('Fetching:', source.audio.url);
         
-        // Fetch audio file
-        const response = await fetch(zone.audio.url);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
+        const response = await fetch(source.audio.url);
         const arrayBuffer = await response.arrayBuffer();
-        console.log('Downloaded audio for:', zone.id);
-        
-        // Decode audio data
         const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-        console.log('Decoded audio for:', zone.id);
         
-        // Create gain node for volume control
+        console.log('Loaded:', source.id);
+        
+        // Create audio nodes
         const gainNode = this.audioContext.createGain();
-        gainNode.gain.value = 0; // Start silent
+        const filterNode = this.audioContext.createBiquadFilter();
+        
+        gainNode.gain.value = 0;
+        filterNode.type = 'lowpass';
+        filterNode.frequency.value = 20000;
+        
+        // Connect: source -> filter -> gain -> destination
+        filterNode.connect(gainNode);
         gainNode.connect(this.audioContext.destination);
         
-        this.activeTracks.set(zone.id, {
+        this.audioSources.set(source.id, {
+          config: source,
           audioBuffer: audioBuffer,
-          gainNode: gainNode,
           source: null,
-          zone: zone,
-          active: false,
-          targetVolume: zone.audio.volume || 0.8,
-          loop: zone.audio.loop !== false
+          gainNode: gainNode,
+          filterNode: filterNode
         });
         
-        console.log('Setup complete for:', zone.id);
       } catch (error) {
-        console.error('Failed to load audio for zone:', zone.id, error);
+        console.error('Failed to load:', source.id, error);
       }
     }
     
-    console.log(`Loaded ${this.activeTracks.size} audio zones`);
-  }
-  
-  drawZones() {
-    this.config.audioZones.forEach(zone => {
-      this.drawZone(zone);
-    });
-  }
-  
-  drawZone(zone) {
-    if (!zone.coordinates || zone.coordinates.length === 0) return;
-    
-    const polygon = L.polygon(zone.coordinates, {
-      color: zone.color || '#3388ff',
-      fillOpacity: 0.2,
-      weight: 2
-    }).addTo(this.map);
-    
-    polygon.on('click', () => {
-      this.showZoneInfo(zone);
-    });
-    
-    this.markers.zones.push(polygon);
-  }
-  
-  drawPath() {
-    const pathCoords = this.config.path.coordinates;
-    
-    const polyline = L.polyline(pathCoords, {
-      color: '#FF6B6B',
-      weight: 3,
-      opacity: 0.7,
-      dashArray: '10, 10'
-    }).addTo(this.map);
-    
-    this.map.fitBounds(polyline.getBounds());
+    console.log(`Loaded ${this.audioSources.size} sources`);
   }
   
   togglePlayback() {
@@ -199,8 +158,8 @@ class SoundmapPlayer {
   }
   
   startPlayback() {
-    if (this.activeTracks.size === 0) {
-      console.error('No audio zones loaded yet');
+    if (this.audioSources.size === 0) {
+      console.error('No audio loaded');
       return;
     }
     
@@ -208,210 +167,104 @@ class SoundmapPlayer {
     document.getElementById('play-btn').textContent = 'Stop Audio';
     document.getElementById('status').classList.remove('status-hidden');
     
-    // Start all audio sources
-    this.activeTracks.forEach((track, zoneId) => {
-      this.startAudioSource(track);
+    // Start all sources
+    this.audioSources.forEach((audioSource) => {
+      const source = this.audioContext.createBufferSource();
+      source.buffer = audioSource.audioBuffer;
+      source.loop = audioSource.config.audio.loop;
+      source.connect(audioSource.filterNode);
+      source.start(0);
+      audioSource.source = source;
     });
     
-    const pos = this.markers.listener.getLatLng();
+    // Initial position update
+    const pos = this.listenerMarker.getLatLng();
     this.updateListenerPosition(pos.lat, pos.lng);
-    
-    if (this.mode === 'animate') {
-      this.startAnimation();
-    }
-    
-    if (this.mode === 'gps') {
-      this.startGPSTracking();
-    }
-  }
-  
-  startAudioSource(track) {
-    // Create new source node
-    const source = this.audioContext.createBufferSource();
-    source.buffer = track.audioBuffer;
-    source.loop = track.loop;
-    source.connect(track.gainNode);
-    source.start(0);
-    
-    track.source = source;
   }
   
   stopPlayback() {
     this.isPlaying = false;
     document.getElementById('play-btn').textContent = 'Start Audio';
     
-    // Stop all audio sources
-    this.activeTracks.forEach(track => {
-      if (track.source) {
-        track.source.stop();
-        track.source = null;
+    this.audioSources.forEach((audioSource) => {
+      if (audioSource.source) {
+        audioSource.source.stop();
+        audioSource.source = null;
       }
-      track.gainNode.gain.value = 0;
+      audioSource.gainNode.gain.value = 0;
     });
-    
-    if (this.animationActive) {
-      this.stopAnimation();
-    }
-    
-    if (this.gpsWatchId) {
-      navigator.geolocation.clearWatch(this.gpsWatchId);
-    }
   }
   
   updateListenerPosition(lat, lng) {
-    this.currentPosition = { lat, lng };
+    this.listenerPosition = { lat, lng };
     
-    const activeZones = [];
+    let nearestSource = null;
+    let minDistance = Infinity;
     
-    this.activeTracks.forEach((track, zoneId) => {
-      const inZone = this.isPointInZone(lat, lng, track.zone);
+    this.audioSources.forEach((audioSource, id) => {
+      const sourcePos = audioSource.config.position;
+      const distance = this.calculateDistance(lat, lng, sourcePos[0], sourcePos[1]);
       
-      if (inZone) {
-        activeZones.push(zoneId);
-        this.fadeInTrack(track);
-      } else {
-        this.fadeOutTrack(track);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestSource = id;
       }
+      
+      // Update audio based on distance
+      this.updateAudioForDistance(audioSource, distance);
     });
     
+    // Update UI
     document.getElementById('current-zone').textContent = 
-      activeZones.length > 0 ? activeZones.join(', ') : 'None';
-    document.getElementById('active-tracks').textContent = activeZones.length;
+      nearestSource ? `${nearestSource} (${Math.round(minDistance)}m)` : 'None';
+    document.getElementById('active-tracks').textContent = this.audioSources.size;
   }
   
-  isPointInZone(lat, lng, zone) {
-    if (!zone.coordinates) return false;
+  updateAudioForDistance(audioSource, distance) {
+    const maxDistance = audioSource.config.audio.maxDistance || 500;
+    const targetVolume = audioSource.config.audio.volume || 0.8;
     
-    const point = L.latLng(lat, lng);
-    const polygon = L.polygon(zone.coordinates);
-    return polygon.getBounds().contains(point);
-  }
-  
-  fadeInTrack(track) {
-    if (track.active) return;
+    // Calculate volume based on distance (inverse square law)
+    let volume = 0;
+    if (distance < maxDistance) {
+      volume = Math.pow(1 - (distance / maxDistance), 2) * targetVolume * this.masterVolume;
+    }
     
-    track.active = true;
-    const targetVolume = track.targetVolume * this.masterVolume;
+    // Calculate filter frequency (low-pass when distant)
+    let filterFreq = 20000;
+    if (distance < maxDistance) {
+      const normalized = distance / maxDistance;
+      filterFreq = 20000 - (normalized * 19000); // 20kHz to 1kHz
+    } else {
+      filterFreq = 500; // Very muffled when far
+    }
+    
+    // Apply smoothly
     const currentTime = this.audioContext.currentTime;
-    
-    track.gainNode.gain.cancelScheduledValues(currentTime);
-    track.gainNode.gain.setValueAtTime(track.gainNode.gain.value, currentTime);
-    track.gainNode.gain.linearRampToValueAtTime(targetVolume, currentTime + this.crossfadeDuration);
+    audioSource.gainNode.gain.linearRampToValueAtTime(volume, currentTime + 0.1);
+    audioSource.filterNode.frequency.linearRampToValueAtTime(filterFreq, currentTime + 0.1);
   }
   
-  fadeOutTrack(track) {
-    if (!track.active) return;
+  calculateDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371000; // Earth radius in meters
+    const dLat = this.toRad(lat2 - lat1);
+    const dLng = this.toRad(lng2 - lng1);
     
-    track.active = false;
-    const currentTime = this.audioContext.currentTime;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
     
-    track.gainNode.gain.cancelScheduledValues(currentTime);
-    track.gainNode.gain.setValueAtTime(track.gainNode.gain.value, currentTime);
-    track.gainNode.gain.linearRampToValueAtTime(0, currentTime + this.crossfadeDuration);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+  
+  toRad(degrees) {
+    return degrees * (Math.PI / 180);
   }
   
   updateMasterVolume() {
-    this.activeTracks.forEach(track => {
-      if (track.active) {
-        const targetVolume = track.targetVolume * this.masterVolume;
-        track.gainNode.gain.value = targetVolume;
-      }
-    });
-  }
-  
-  changeMode(newMode) {
-    this.mode = newMode;
-    
-    if (newMode === 'click') {
-      this.markers.listener.dragging.enable();
-    } else {
-      this.markers.listener.dragging.disable();
+    if (this.listenerPosition) {
+      this.updateListenerPosition(this.listenerPosition.lat, this.listenerPosition.lng);
     }
-    
-    if (this.animationActive) {
-      this.stopAnimation();
-    }
-  }
-  
-  startAnimation() {
-    if (!this.config.path) return;
-    
-    this.animationActive = true;
-    this.animationStartTime = Date.now();
-    this.animationProgress = 0;
-    
-    const duration = this.config.path.duration * 1000;
-    const pathCoords = this.config.path.coordinates;
-    
-    const animate = () => {
-      if (!this.animationActive) return;
-      
-      const elapsed = Date.now() - this.animationStartTime;
-      this.animationProgress = Math.min(elapsed / duration, 1);
-      
-      const index = this.animationProgress * (pathCoords.length - 1);
-      const lowerIndex = Math.floor(index);
-      const upperIndex = Math.ceil(index);
-      const fraction = index - lowerIndex;
-      
-      const posA = pathCoords[lowerIndex];
-      const posB = pathCoords[upperIndex] || posA;
-      
-      const lat = posA[0] + (posB[0] - posA[0]) * fraction;
-      const lng = posA[1] + (posB[1] - posA[1]) * fraction;
-      
-      this.markers.listener.setLatLng([lat, lng]);
-      this.updateListenerPosition(lat, lng);
-      
-      if (this.animationProgress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        this.animationActive = false;
-      }
-    };
-    
-    animate();
-  }
-  
-  stopAnimation() {
-    this.animationActive = false;
-  }
-  
-  startGPSTracking() {
-    if (!navigator.geolocation) {
-      alert('GPS not supported on this device');
-      return;
-    }
-    
-    this.gpsWatchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        
-        this.markers.listener.setLatLng([lat, lng]);
-        this.updateListenerPosition(lat, lng);
-        this.map.panTo([lat, lng]);
-      },
-      (error) => {
-        console.error('GPS error:', error);
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 1000
-      }
-    );
-  }
-  
-  showZoneInfo(zone) {
-    const infoPanel = document.getElementById('zone-info');
-    document.getElementById('zone-title').textContent = zone.name || zone.id;
-    document.getElementById('zone-description').textContent = 
-      zone.description || 'Audio zone';
-    
-    infoPanel.classList.remove('info-hidden');
-    
-    setTimeout(() => {
-      infoPanel.classList.add('info-hidden');
-    }, 3000);
   }
 }
