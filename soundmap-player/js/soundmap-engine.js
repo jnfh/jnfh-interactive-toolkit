@@ -37,47 +37,68 @@ class SoundmapPlayer {
       maxZoom: 19
     }).addTo(this.map);
     
-    // Listener marker (you)
-    this.listenerMarker = L.marker(center, {
+    // Draw audio source points FIRST
+    this.drawAudioSources();
+    
+    // Then add listener marker (YOU) - different position
+    const listenerStart = [center[0] + 0.002, center[1] + 0.002]; // Offset from source
+    
+    this.listenerMarker = L.marker(listenerStart, {
       icon: L.divIcon({
         className: 'listener-marker',
         html: '<div class="pulse"></div>',
         iconSize: [30, 30]
       }),
-      draggable: true
+      draggable: true,
+      zIndexOffset: 1000 // Always on top
     }).addTo(this.map);
+    
+    this.listenerMarker.bindPopup('<b>You are here</b><br>Drag to move');
     
     this.listenerMarker.on('drag', (e) => {
       const pos = e.target.getLatLng();
       this.updateListenerPosition(pos.lat, pos.lng);
     });
     
-    // Click to move
+    this.listenerMarker.on('dragend', (e) => {
+      const pos = e.target.getLatLng();
+      this.updateListenerPosition(pos.lat, pos.lng);
+    });
+    
+    // Click to move listener
     this.map.on('click', (e) => {
       if (this.isPlaying) {
         this.listenerMarker.setLatLng(e.latlng);
         this.updateListenerPosition(e.latlng.lat, e.latlng.lng);
       }
     });
-    
-    // Draw audio source points
-    this.drawAudioSources();
   }
   
   drawAudioSources() {
     const sources = this.config.audioSources || [];
     
     sources.forEach(source => {
+      // Red circle marker for audio source
       const marker = L.circleMarker(source.position, {
-        radius: 10,
+        radius: 12,
         fillColor: source.color || '#FF6B6B',
         color: '#fff',
-        weight: 2,
+        weight: 3,
         opacity: 1,
         fillOpacity: 0.8
       }).addTo(this.map);
       
-      marker.bindPopup(`<b>${source.name}</b><br>Audio source`);
+      // Add distance rings
+      L.circle(source.position, {
+        radius: source.audio.maxDistance || 500,
+        fillColor: source.color || '#FF6B6B',
+        fillOpacity: 0.05,
+        color: source.color || '#FF6B6B',
+        weight: 1,
+        opacity: 0.3
+      }).addTo(this.map);
+      
+      marker.bindPopup(`<b>${source.name}</b><br>Audio source<br>Max range: ${source.audio.maxDistance || 500}m`);
       
       this.sourceMarkers.push(marker);
     });
@@ -116,20 +137,25 @@ class SoundmapPlayer {
         console.log('Fetching:', source.audio.url);
         
         const response = await fetch(source.audio.url);
-        const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         
-        console.log('Loaded:', source.id);
+        const arrayBuffer = await response.arrayBuffer();
+        console.log('Downloaded, decoding...');
+        
+        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+        console.log('Decoded:', source.id, `Duration: ${audioBuffer.duration}s`);
         
         // Create audio nodes
         const gainNode = this.audioContext.createGain();
         const filterNode = this.audioContext.createBiquadFilter();
         
-        gainNode.gain.value = 0;
+        gainNode.gain.value = 0; // Start silent
         filterNode.type = 'lowpass';
         filterNode.frequency.value = 20000;
         
-        // Connect: source -> filter -> gain -> destination
+        // Connect chain
         filterNode.connect(gainNode);
         gainNode.connect(this.audioContext.destination);
         
@@ -167,18 +193,22 @@ class SoundmapPlayer {
     document.getElementById('play-btn').textContent = 'Stop Audio';
     document.getElementById('status').classList.remove('status-hidden');
     
+    console.log('Starting playback...');
+    
     // Start all sources
-    this.audioSources.forEach((audioSource) => {
+    this.audioSources.forEach((audioSource, id) => {
       const source = this.audioContext.createBufferSource();
       source.buffer = audioSource.audioBuffer;
       source.loop = audioSource.config.audio.loop;
       source.connect(audioSource.filterNode);
       source.start(0);
       audioSource.source = source;
+      console.log('Started source:', id);
     });
     
     // Initial position update
     const pos = this.listenerMarker.getLatLng();
+    console.log('Initial listener position:', pos);
     this.updateListenerPosition(pos.lat, pos.lng);
   }
   
@@ -196,6 +226,8 @@ class SoundmapPlayer {
   }
   
   updateListenerPosition(lat, lng) {
+    if (!this.isPlaying) return;
+    
     this.listenerPosition = { lat, lng };
     
     let nearestSource = null;
@@ -204,6 +236,8 @@ class SoundmapPlayer {
     this.audioSources.forEach((audioSource, id) => {
       const sourcePos = audioSource.config.position;
       const distance = this.calculateDistance(lat, lng, sourcePos[0], sourcePos[1]);
+      
+      console.log(`Distance to ${id}: ${Math.round(distance)}m`);
       
       if (distance < minDistance) {
         minDistance = distance;
@@ -227,22 +261,24 @@ class SoundmapPlayer {
     // Calculate volume based on distance (inverse square law)
     let volume = 0;
     if (distance < maxDistance) {
-      volume = Math.pow(1 - (distance / maxDistance), 2) * targetVolume * this.masterVolume;
+      const normalized = distance / maxDistance;
+      volume = Math.pow(1 - normalized, 2) * targetVolume * this.masterVolume;
     }
     
     // Calculate filter frequency (low-pass when distant)
     let filterFreq = 20000;
     if (distance < maxDistance) {
       const normalized = distance / maxDistance;
-      filterFreq = 20000 - (normalized * 19000); // 20kHz to 1kHz
+      filterFreq = 20000 - (normalized * 18500); // 20kHz to 1.5kHz
     } else {
       filterFreq = 500; // Very muffled when far
     }
     
-    // Apply smoothly
-    const currentTime = this.audioContext.currentTime;
-    audioSource.gainNode.gain.linearRampToValueAtTime(volume, currentTime + 0.1);
-    audioSource.filterNode.frequency.linearRampToValueAtTime(filterFreq, currentTime + 0.1);
+    console.log(`Volume: ${volume.toFixed(2)}, Filter: ${Math.round(filterFreq)}Hz`);
+    
+    // Apply immediately for testing
+    audioSource.gainNode.gain.value = volume;
+    audioSource.filterNode.frequency.value = filterFreq;
   }
   
   calculateDistance(lat1, lng1, lat2, lng2) {
@@ -263,7 +299,7 @@ class SoundmapPlayer {
   }
   
   updateMasterVolume() {
-    if (this.listenerPosition) {
+    if (this.listenerPosition && this.isPlaying) {
       this.updateListenerPosition(this.listenerPosition.lat, this.listenerPosition.lng);
     }
   }
