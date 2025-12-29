@@ -21,7 +21,7 @@ class SoundmapBuilder {
     this.isPlaying = false;
     this.masterVolume = 0.8;
     this.fadeRadius = 500;
-    this.fadeSpeed = 0.5;
+    this.fadeSpeed = 0.3;
     
     // Spatial audio settings
     this.spatialAudioEnabled = true;
@@ -566,6 +566,7 @@ class SoundmapBuilder {
     }
     
     let nearestDistance = Infinity;
+    const currentTime = this.audioContext.currentTime;
     
     this.audioSources.forEach((audioSource) => {
       const sourcePos = audioSource.config.position;
@@ -576,18 +577,39 @@ class SoundmapBuilder {
       }
       
       const maxDist = audioSource.config.audio.maxDistance || this.fadeRadius;
-      let volume = 0;
+      let targetVolume = 0;
       
       if (distance < maxDist) {
+        // Smooth falloff curve (inverse square with smoothing)
         const normalized = distance / maxDist;
-        volume = Math.pow(1 - normalized, 2) * audioSource.config.audio.volume * this.masterVolume;
+        const falloff = Math.pow(1 - normalized, 2.5); // Slightly steeper curve for better definition
+        targetVolume = falloff * audioSource.config.audio.volume * this.masterVolume;
       }
       
-      const currentTime = this.audioContext.currentTime;
-      audioSource.gainNode.gain.linearRampToValueAtTime(
-        volume, 
-        currentTime + this.fadeSpeed
-      );
+      // Prevent volume from going to exactly 0 (causes exponential ramp issues)
+      const safeVolume = Math.max(targetVolume, 0.0001);
+      
+      // Get current volume
+      const currentVolume = audioSource.gainNode.gain.value;
+      
+      // Use exponential ramp for smoother transitions
+      // Cancel any scheduled changes first
+      audioSource.gainNode.gain.cancelScheduledValues(currentTime);
+      audioSource.gainNode.gain.setValueAtTime(currentVolume, currentTime);
+      
+      // Exponential ramp to target (much smoother than linear)
+      try {
+        audioSource.gainNode.gain.exponentialRampToValueAtTime(
+          safeVolume,
+          currentTime + this.fadeSpeed
+        );
+      } catch (e) {
+        // Fallback to linear if exponential fails
+        audioSource.gainNode.gain.linearRampToValueAtTime(
+          safeVolume,
+          currentTime + this.fadeSpeed
+        );
+      }
     });
     
     document.getElementById('distance-display').textContent = `${Math.round(nearestDistance)}m`;
@@ -669,3 +691,4 @@ class SoundmapBuilder {
     console.log('Config exported');
   }
 }
+
