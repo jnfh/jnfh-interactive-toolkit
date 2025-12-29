@@ -13,7 +13,7 @@
         [51.500, -0.135]
       ],
       "audio": {
-        "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "url": "https://cdn.freesound.org/previews/612/612091_424082-lq.mp3",
         "fadeIn": 2,
         "fadeOut": 2,
         "volume": 0.6,
@@ -32,7 +32,7 @@
         [51.505, -0.130]
       ],
       "audio": {
-        "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+        "url": "https://cdn.freesound.org/previews/451/451521_9119260-lq.mp3",
         "fadeIn": 1.5,
         "fadeOut": 1.5,
         "volume": 0.8,
