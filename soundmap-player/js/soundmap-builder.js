@@ -1,6 +1,5 @@
 /**
  * JnfH Soundmap Builder with Advanced Spatial Audio
- * Integrates spatial audio from interactive-audio-hover.js
  */
 
 class SoundmapBuilder {
@@ -33,6 +32,7 @@ class SoundmapBuilder {
     this.sourceMarkers = [];
     this.nextSourceId = 1;
     this.pendingSource = null;
+    this.selectedSource = null;
   }
   
   async init() {
@@ -48,19 +48,25 @@ class SoundmapBuilder {
   initMap() {
     const center = this.config.mapCenter || [51.5074, -0.1278];
     
-    this.map = L.map(this.mapContainer).setView(center, 15);
+    this.map = L.map(this.mapContainer, {
+      dragging: true,
+      doubleClickZoom: true,
+      scrollWheelZoom: true
+    }).setView(center, 15);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
       maxZoom: 19
     }).addTo(this.map);
     
+    // Click for placing sources only
     this.map.on('click', (e) => {
       if (this.mode === 'edit' && this.pendingSource) {
         this.placeSource(e.latlng);
       }
     });
     
+    // Mouse move for preview mode
     this.map.on('mousemove', (e) => {
       if (this.mode === 'preview' && this.isPlaying) {
         this.updateListenerPosition(e.latlng.lat, e.latlng.lng);
@@ -130,13 +136,17 @@ class SoundmapBuilder {
       btn.classList.add('btn-primary');
       btn.classList.remove('btn-secondary');
       editPanel.style.display = 'block';
-      this.setMarkersDraggable(true);
+      this.enableSourceDragging();
+      // Disable map dragging in edit mode to allow marker dragging
+      this.map.dragging.disable();
     } else {
       btn.textContent = 'Preview Mode';
       btn.classList.remove('btn-primary');
       btn.classList.add('btn-secondary');
       editPanel.style.display = 'none';
-      this.setMarkersDraggable(false);
+      this.disableSourceDragging();
+      // Enable map dragging in preview mode
+      this.map.dragging.enable();
     }
     
     document.getElementById('current-mode').textContent = 
@@ -203,14 +213,14 @@ class SoundmapBuilder {
   }
   
   createSourceMarker(source) {
-    const marker = L.circleMarker(source.position, {
-      radius: 12,
-      fillColor: source.color,
-      color: '#fff',
-      weight: 3,
-      opacity: 1,
-      fillOpacity: 0.8,
-      draggable: this.mode === 'edit'
+    const marker = L.marker(source.position, {
+      icon: L.divIcon({
+        className: 'audio-source-marker',
+        html: `<div style="background: ${source.color}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      }),
+      draggable: false // Will be enabled in edit mode
     }).addTo(this.map);
     
     const ring = L.circle(source.position, {
@@ -220,25 +230,83 @@ class SoundmapBuilder {
       color: source.color,
       weight: 1,
       opacity: 0.3,
-      dashArray: '5, 10'
+      dashArray: '5, 10',
+      interactive: false
     }).addTo(this.map);
     
-    marker.bindPopup(`<b>${source.name}</b><br>Range: ${source.audio.maxDistance}m<br><small>Right-click to delete</small>`);
+    // Popup with delete button
+    const popupContent = `
+      <div style="text-align: center;">
+        <strong>${source.name}</strong><br>
+        <small>Range: ${source.audio.maxDistance}m</small><br>
+        <button id="delete-${source.id}" style="
+          margin-top: 8px;
+          padding: 6px 12px;
+          background: #ff4444;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+        ">Delete Source</button>
+      </div>
+    `;
     
+    marker.bindPopup(popupContent);
+    
+    // Handle delete button click
+    marker.on('popupopen', () => {
+      const deleteBtn = document.getElementById(`delete-${source.id}`);
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => {
+          if (confirm(`Delete "${source.name}"?`)) {
+            this.deleteSource(source.id);
+            marker.closePopup();
+          }
+        });
+      }
+    });
+    
+    // Drag event
     marker.on('drag', (e) => {
       const pos = e.target.getLatLng();
       source.position = [pos.lat, pos.lng];
       ring.setLatLng(pos);
     });
     
-    marker.on('contextmenu', (e) => {
-      L.DomEvent.preventDefault(e);
-      if (confirm(`Delete ${source.name}?`)) {
-        this.deleteSource(source.id);
+    // Click to select
+    marker.on('click', (e) => {
+      L.DomEvent.stopPropagation(e);
+      if (this.mode === 'edit') {
+        this.selectSource(source.id);
       }
     });
     
     this.sourceMarkers.push({ marker, ring, sourceId: source.id });
+  }
+  
+  selectSource(sourceId) {
+    this.selectedSource = sourceId;
+    
+    // Highlight selected marker
+    this.sourceMarkers.forEach(m => {
+      const source = this.config.audioSources.find(s => s.id === m.sourceId);
+      if (m.sourceId === sourceId) {
+        m.marker.setIcon(L.divIcon({
+          className: 'audio-source-marker',
+          html: `<div style="background: ${source.color}; width: 30px; height: 30px; border-radius: 50%; border: 4px solid yellow; box-shadow: 0 3px 10px rgba(255,255,0,0.6);"></div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        }));
+      } else {
+        m.marker.setIcon(L.divIcon({
+          className: 'audio-source-marker',
+          html: `<div style="background: ${source.color}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        }));
+      }
+    });
   }
   
   deleteSource(sourceId) {
@@ -253,6 +321,8 @@ class SoundmapBuilder {
     
     this.audioSources.delete(sourceId);
     this.updateSourcesList();
+    
+    console.log('Deleted:', sourceId);
   }
   
   loadExistingSources() {
@@ -262,13 +332,15 @@ class SoundmapBuilder {
     this.updateSourcesList();
   }
   
-  setMarkersDraggable(draggable) {
+  enableSourceDragging() {
     this.sourceMarkers.forEach(m => {
-      if (draggable) {
-        m.marker.dragging.enable();
-      } else {
-        m.marker.dragging.disable();
-      }
+      m.marker.dragging.enable();
+    });
+  }
+  
+  disableSourceDragging() {
+    this.sourceMarkers.forEach(m => {
+      m.marker.dragging.disable();
     });
   }
   
@@ -286,7 +358,8 @@ class SoundmapBuilder {
           color: source.color,
           weight: 1,
           opacity: 0.3,
-          dashArray: '5, 10'
+          dashArray: '5, 10',
+          interactive: false
         }).addTo(this.map);
       }
     });
@@ -309,11 +382,23 @@ class SoundmapBuilder {
     
     this.config.audioSources.forEach(source => {
       const item = document.createElement('div');
-      item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px;';
+      item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px; cursor: pointer; border: 2px solid transparent;';
+      
       item.innerHTML = `
         <div style="color: ${source.color}; font-weight: 600;">${source.name}</div>
         <div style="color: #999; margin-top: 4px;">Range: ${source.audio.maxDistance}m</div>
       `;
+      
+      // Click to select
+      item.addEventListener('click', () => {
+        this.selectSource(source.id);
+        const markerObj = this.sourceMarkers.find(m => m.sourceId === source.id);
+        if (markerObj) {
+          this.map.setView(markerObj.marker.getLatLng(), this.map.getZoom());
+          markerObj.marker.openPopup();
+        }
+      });
+      
       container.appendChild(item);
     });
   }
@@ -366,7 +451,6 @@ class SoundmapBuilder {
     this.masterGainNode.connect(this.audioContext.destination);
     this.masterGainNode.gain.value = this.masterVolume;
     
-    // Set listener at origin
     if (this.audioContext.listener.positionX) {
       this.audioContext.listener.positionX.value = 0;
       this.audioContext.listener.positionY.value = 0;
@@ -419,7 +503,6 @@ class SoundmapBuilder {
       try {
         const audioBuffer = await this.audioContext.decodeAudioData(source.audio.data.slice(0));
         
-        // Create 3D panner with HRTF
         const panner = this.audioContext.createPanner();
         panner.panningModel = 'HRTF';
         panner.distanceModel = 'inverse';
@@ -433,8 +516,6 @@ class SoundmapBuilder {
         const reverbSend = this.audioContext.createGain();
         reverbSend.gain.value = 0.3;
         
-        // Routing: panner -> gainNode -> master
-        //                  -> reverbSend -> shared reverb
         panner.connect(gainNode);
         gainNode.connect(this.masterGainNode);
         
@@ -443,7 +524,6 @@ class SoundmapBuilder {
           reverbSend.connect(this.reverbSendGain);
         }
         
-        // Set source position
         const pos = this.latLngToXYZ(source.position[0], source.position[1]);
         panner.setPosition(pos.x, pos.y, pos.z);
         
@@ -479,7 +559,6 @@ class SoundmapBuilder {
     
     const listenerPos = this.latLngToXYZ(lat, lng);
     
-    // Update listener position
     if (this.audioContext.listener.positionX) {
       this.audioContext.listener.positionX.value = listenerPos.x;
       this.audioContext.listener.positionY.value = listenerPos.y;
@@ -496,7 +575,6 @@ class SoundmapBuilder {
         nearestDistance = distance;
       }
       
-      // Distance-based fade
       const maxDist = audioSource.config.audio.maxDistance || this.fadeRadius;
       let volume = 0;
       
@@ -505,7 +583,6 @@ class SoundmapBuilder {
         volume = Math.pow(1 - normalized, 2) * audioSource.config.audio.volume * this.masterVolume;
       }
       
-      // Smooth fade transition
       const currentTime = this.audioContext.currentTime;
       audioSource.gainNode.gain.linearRampToValueAtTime(
         volume, 
