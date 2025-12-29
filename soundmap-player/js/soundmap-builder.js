@@ -1,6 +1,6 @@
 /**
  * JnfH Soundmap Builder with Advanced Spatial Audio
- * Integrates physics and spatial audio from interactive-audio-hover.js
+ * Integrates spatial audio from interactive-audio-hover.js
  */
 
 class SoundmapBuilder {
@@ -91,25 +91,28 @@ class SoundmapBuilder {
     
     // Fade radius
     const fadeRadiusSlider = document.getElementById('fade-radius');
-    if (fadeRadiusSlider) {
-      fadeRadiusSlider.addEventListener('input', (e) => {
-        this.fadeRadius = parseInt(e.target.value);
-        document.getElementById('fade-radius-value').textContent = e.target.value + 'm';
-        this.updateSourceRings();
-      });
-    }
+    fadeRadiusSlider.addEventListener('input', (e) => {
+      this.fadeRadius = parseInt(e.target.value);
+      document.getElementById('fade-radius-value').textContent = e.target.value + 'm';
+      this.updateSourceRings();
+    });
+    
+    // Fade speed
+    const fadeSpeedSlider = document.getElementById('fade-speed');
+    fadeSpeedSlider.addEventListener('input', (e) => {
+      this.fadeSpeed = parseFloat(e.target.value);
+      document.getElementById('fade-speed-value').textContent = e.target.value + 's';
+    });
     
     // Reverb amount
     const reverbSlider = document.getElementById('reverb-amount');
-    if (reverbSlider) {
-      reverbSlider.addEventListener('input', (e) => {
-        this.reverbAmount = e.target.value / 100;
-        document.getElementById('reverb-value').textContent = e.target.value + '%';
-        if (this.reverbSendGain) {
-          this.reverbSendGain.gain.value = this.reverbAmount * 0.25;
-        }
-      });
-    }
+    reverbSlider.addEventListener('input', (e) => {
+      this.reverbAmount = e.target.value / 100;
+      document.getElementById('reverb-value').textContent = e.target.value + '%';
+      if (this.reverbSendGain) {
+        this.reverbSendGain.gain.value = this.reverbAmount * 0.25;
+      }
+    });
     
     document.getElementById('export-config').addEventListener('click', () => {
       this.exportConfig();
@@ -124,10 +127,14 @@ class SoundmapBuilder {
     
     if (this.mode === 'edit') {
       btn.textContent = 'Edit Mode';
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-secondary');
       editPanel.style.display = 'block';
       this.setMarkersDraggable(true);
     } else {
       btn.textContent = 'Preview Mode';
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-secondary');
       editPanel.style.display = 'none';
       this.setMarkersDraggable(false);
     }
@@ -286,11 +293,13 @@ class SoundmapBuilder {
   }
   
   updateSourcesList() {
+    const container = document.getElementById('source-items');
     const countEl = document.getElementById('source-count');
+    
     if (countEl) {
       countEl.textContent = this.config.audioSources.length;
     }
-    const container = document.getElementById('source-items');
+    
     container.innerHTML = '';
     
     if (this.config.audioSources.length === 0) {
@@ -364,7 +373,7 @@ class SoundmapBuilder {
       this.audioContext.listener.positionZ.value = 0;
       
       this.audioContext.listener.forwardX.value = 0;
-      this.audioContext.listener.forwardY.value = 1;  // North = forward
+      this.audioContext.listener.forwardY.value = 1;
       this.audioContext.listener.forwardZ.value = 0;
       this.audioContext.listener.upX.value = 0;
       this.audioContext.listener.upY.value = 0;
@@ -583,11 +592,3 @@ class SoundmapBuilder {
     console.log('Config exported');
   }
 }
-
-  updateSourceCount() {
-    const countEl = document.getElementById('source-count');
-    if (countEl) {
-      countEl.textContent = this.config.audioSources.length;
-    }
-  }
-
