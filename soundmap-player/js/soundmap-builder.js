@@ -434,12 +434,23 @@ class SoundmapBuilder {
     document.getElementById('play-btn').textContent = 'Stop Preview';
     document.getElementById('status').classList.remove('status-hidden');
     
-    // Initialize target volumes
+    // Initialize target volumes for ALL sources
     this.targetVolumes.clear();
     this.audioSources.forEach((audioSource, id) => {
+      // Ensure currentGain is initialized
+      if (typeof audioSource.currentGain === 'undefined') {
+        audioSource.currentGain = 0;
+      }
+      // Cancel any existing scheduled values and reset to 0
+      const currentTime = this.audioContext.currentTime;
+      audioSource.gainNode.gain.cancelScheduledValues(currentTime);
+      audioSource.gainNode.gain.setValueAtTime(0, currentTime);
+      // Set initial target volume to 0
       this.targetVolumes.set(id, 0);
       this.startAudioSource(audioSource);
     });
+    
+    console.log(`Initialized ${this.audioSources.size} audio sources for preview`);
     
     // Start animation loop for smooth fading
     this.startAnimationLoop();
@@ -608,8 +619,10 @@ class SoundmapBuilder {
       let targetVolume = 0;
       
       if (distance < maxDist) {
-        // Smooth falloff curve (inverse square with smoothing)
-        const normalized = distance / maxDist;
+        // Add minimum distance threshold to prevent jerky behavior at center
+        const minDistance = 1; // 1 meter minimum to stabilize calculations
+        const adjustedDistance = Math.max(distance, minDistance);
+        const normalized = adjustedDistance / maxDist;
         const falloff = Math.pow(1 - normalized, 2.5); // Slightly steeper curve for better definition
         targetVolume = falloff * audioSource.config.audio.volume * this.masterVolume;
       }
@@ -634,7 +647,23 @@ class SoundmapBuilder {
       
       // Smoothly interpolate each source's gain toward its target volume
       this.audioSources.forEach((audioSource, id) => {
-        const targetVolume = this.targetVolumes.get(id) || 0;
+        // Safety check - ensure audioSource and gainNode exist
+        if (!audioSource || !audioSource.gainNode) {
+          console.warn('Missing audioSource or gainNode for:', id);
+          return;
+        }
+        
+        // Ensure this source has a target volume (initialize if missing)
+        if (!this.targetVolumes.has(id)) {
+          this.targetVolumes.set(id, 0);
+        }
+        
+        const targetVolume = this.targetVolumes.get(id);
+        
+        // Ensure currentGain is defined (initialize if missing)
+        if (typeof audioSource.currentGain === 'undefined') {
+          audioSource.currentGain = audioSource.gainNode.gain.value || 0;
+        }
         const currentGain = audioSource.currentGain;
         
         // Use exponential interpolation for ultra-smooth fading
@@ -642,35 +671,37 @@ class SoundmapBuilder {
         // Lower values = smoother but slower response
         // Higher values = faster response but potentially less smooth
         
-        if (Math.abs(currentGain - targetVolume) < 0.001) {
-          // Already at target (or very close)
-          audioSource.currentGain = targetVolume;
-          audioSource.gainNode.gain.setValueAtTime(targetVolume, currentTime);
-        } else {
-          // Exponential interpolation toward target
-          // This creates buttery smooth transitions
-          const diff = targetVolume - currentGain;
-          let newGain = currentGain + (diff * this.smoothness);
-          
-          // Clamp to target to prevent overshoot/undershoot
-          if (targetVolume > currentGain && newGain > targetVolume) {
-            newGain = targetVolume;
-          } else if (targetVolume < currentGain && newGain < targetVolume) {
-            newGain = targetVolume;
-          }
-          
-          // Allow going to zero for sources far away
-          if (targetVolume === 0 && newGain < 0.001) {
-            newGain = 0;
-          }
-          
-          // Update tracked gain value
-          audioSource.currentGain = newGain;
-          
-          // Cancel any scheduled values and set new value immediately
-          // This ensures smooth continuous updates without scheduling conflicts
-          audioSource.gainNode.gain.cancelScheduledValues(currentTime);
+        // Only update if there's a meaningful difference (reduces unnecessary updates)
+        if (Math.abs(currentGain - targetVolume) < 0.0001) {
+          // Already at target (or very close) - no update needed
+          return;
+        }
+        
+        // Exponential interpolation toward target
+        // This creates buttery smooth transitions
+        const diff = targetVolume - currentGain;
+        let newGain = currentGain + (diff * this.smoothness);
+        
+        // Clamp to target to prevent overshoot/undershoot
+        if ((targetVolume > currentGain && newGain > targetVolume) || 
+            (targetVolume < currentGain && newGain < targetVolume)) {
+          newGain = targetVolume;
+        }
+        
+        // Allow going to zero for sources far away
+        if (targetVolume === 0 && newGain < 0.001) {
+          newGain = 0;
+        }
+        
+        // Update tracked gain value
+        audioSource.currentGain = newGain;
+        
+        // Set new value directly using setValueAtTime with currentTime
+        // This immediately sets the value without scheduling, overriding any previous scheduled values
+        try {
           audioSource.gainNode.gain.setValueAtTime(newGain, currentTime);
+        } catch (e) {
+          console.warn('Error updating gain for', id, ':', e);
         }
       });
       
