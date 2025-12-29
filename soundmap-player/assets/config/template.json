@@ -1,0 +1,55 @@
+{
+  "title": "Test Soundmap",
+  "mapCenter": [51.5074, -0.1278],
+  "audioZones": [
+    {
+      "id": "zone-ambient",
+      "name": "Ambient Layer",
+      "description": "Background soundscape",
+      "coordinates": [
+        [51.515, -0.135],
+        [51.515, -0.120],
+        [51.500, -0.120],
+        [51.500, -0.135]
+      ],
+      "audio": {
+        "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "fadeIn": 2,
+        "fadeOut": 2,
+        "volume": 0.6,
+        "loop": true
+      },
+      "color": "#667eea"
+    },
+    {
+      "id": "zone-detail",
+      "name": "Detail Layer",
+      "description": "Location-specific audio",
+      "coordinates": [
+        [51.510, -0.130],
+        [51.510, -0.125],
+        [51.505, -0.125],
+        [51.505, -0.130]
+      ],
+      "audio": {
+        "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+        "fadeIn": 1.5,
+        "fadeOut": 1.5,
+        "volume": 0.8,
+        "loop": true
+      },
+      "color": "#f093fb"
+    }
+  ],
+  "path": {
+    "coordinates": [
+      [51.515, -0.135],
+      [51.512, -0.132],
+      [51.510, -0.128],
+      [51.507, -0.125],
+      [51.505, -0.122],
+      [51.500, -0.120]
+    ],
+    "duration": 60
+  }
+}
