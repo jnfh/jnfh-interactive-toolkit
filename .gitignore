@@ -137,3 +137,27 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Audio files (too large for git)
+*.mp3
+*.wav
+*.ogg
+*.flac
+
+# Large video files
+*.mp4
+*.mov
+*.avi
+
+# Environment
+.env
+.env.local
+
+# Build
+dist/
+build/
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
