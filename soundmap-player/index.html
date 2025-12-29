@@ -23,6 +23,24 @@
         <span id="volume-value">80%</span>
       </div>
       
+      <div class="control-group">
+        <label>Fade Radius</label>
+        <input type="range" id="fade-radius" min="100" max="1000" value="500" step="50">
+        <span id="fade-radius-value">500m</span>
+      </div>
+      
+      <div class="control-group">
+        <label>Fade Speed</label>
+        <input type="range" id="fade-speed" min="0.1" max="2" value="0.5" step="0.1">
+        <span id="fade-speed-value">0.5s</span>
+      </div>
+      
+      <div class="control-group">
+        <label>Reverb Amount</label>
+        <input type="range" id="reverb-amount" min="0" max="100" value="100">
+        <span id="reverb-value">100%</span>
+      </div>
+      
       <div id="edit-panel" class="control-group">
         <h3>Add Audio Source</h3>
         <input type="text" id="source-name" placeholder="Source name">
@@ -35,7 +53,7 @@
       </div>
       
       <div id="sources-list" class="control-group">
-        <h3>Audio Sources</h3>
+        <h3>Audio Sources (<span id="source-count">0</span>)</h3>
         <div id="source-items"></div>
       </div>
       
@@ -52,21 +70,28 @@
       
       <div class="control-group">
         <button id="export-config" class="btn-secondary">Export Config</button>
-        <button id="save-to-r2" class="btn-secondary">Save to R2</button>
       </div>
       
       <div class="control-group">
         <h3>Instructions</h3>
         <p style="font-size: 12px; color: #999; line-height: 1.6;">
           <strong>Edit Mode:</strong><br>
-          • Add audio sources with the form above<br>
-          • Click map to place new sources<br>
-          • Drag existing sources to reposition<br>
-          • Right-click sources to delete<br>
+          • Upload audio file and enter name<br>
+          • Click "Add to Map"<br>
+          • Click map to place source<br>
+          • Drag sources to reposition<br>
+          • Right-click to delete<br>
           <br>
           <strong>Preview Mode:</strong><br>
           • Move mouse to hear spatial audio<br>
-          • Audio adjusts by distance & direction
+          • HRTF binaural positioning<br>
+          • Distance-based fading<br>
+          • Reverb send/return system<br>
+          <br>
+          <strong>Export:</strong><br>
+          • Saves config as JSON<br>
+          • Upload audio files to R2 manually<br>
+          • Config references R2 URLs
         </p>
       </div>
     </div>
@@ -80,7 +105,6 @@
   <script>
     let soundmapBuilder;
     
-    // Start with empty project or load existing
     const defaultConfig = {
       title: "New Soundmap",
       mapCenter: [51.5074, -0.1278],
