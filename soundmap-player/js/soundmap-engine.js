@@ -32,13 +32,12 @@ class SoundmapPlayer {
     this.initMap();
     this.setupAudioContext();
     this.bindControls();
-    await this.loadAudioZones();
     
     if (this.config.path) {
       this.drawPath();
     }
     
-    console.log('Soundmap Player ready');
+    console.log('Soundmap Player ready - click Start Audio to begin');
   }
   
   initMap() {
@@ -79,6 +78,10 @@ class SoundmapPlayer {
         await Tone.start();
         this.audioContext = Tone.getContext();
         console.log('Audio context started');
+        
+        // Load audio zones AFTER context is ready
+        await this.loadAudioZones();
+        this.drawZones();
       }
       
       this.togglePlayback();
@@ -110,26 +113,40 @@ class SoundmapPlayer {
   async loadAudioZones() {
     const zones = this.config.audioZones || [];
     
+    console.log('Loading audio zones...');
+    
     for (const zone of zones) {
-      const player = new Tone.Player({
-        url: zone.audio.url,
-        loop: zone.audio.loop !== false,
-        volume: Tone.gainToDb(0)
-      }).toDestination();
-      
-      await player.load();
-      
-      this.activeTracks.set(zone.id, {
-        player: player,
-        zone: zone,
-        active: false,
-        targetVolume: zone.audio.volume || 0.8
-      });
-      
-      this.drawZone(zone);
+      try {
+        console.log('Loading audio:', zone.audio.url);
+        
+        const player = new Tone.Player({
+          url: zone.audio.url,
+          loop: zone.audio.loop !== false,
+          volume: Tone.gainToDb(0)
+        }).toDestination();
+        
+        await player.load();
+        
+        console.log('Loaded:', zone.id);
+        
+        this.activeTracks.set(zone.id, {
+          player: player,
+          zone: zone,
+          active: false,
+          targetVolume: zone.audio.volume || 0.8
+        });
+      } catch (error) {
+        console.error('Failed to load audio for zone:', zone.id, error);
+      }
     }
     
-    console.log(`Loaded ${zones.length} audio zones`);
+    console.log(`Loaded ${this.activeTracks.size} audio zones`);
+  }
+  
+  drawZones() {
+    this.config.audioZones.forEach(zone => {
+      this.drawZone(zone);
+    });
   }
   
   drawZone(zone) {
@@ -170,6 +187,11 @@ class SoundmapPlayer {
   }
   
   startPlayback() {
+    if (this.activeTracks.size === 0) {
+      console.error('No audio zones loaded yet');
+      return;
+    }
+    
     this.isPlaying = true;
     document.getElementById('play-btn').textContent = 'Stop Audio';
     document.getElementById('status').classList.remove('status-hidden');
