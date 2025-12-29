@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JnfH Soundmap Player</title>
+  <title>JnfH Soundmap Builder</title>
   
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="css/player.css">
@@ -12,8 +12,9 @@
   <div id="app">
     <div id="controls">
       <div class="control-group">
-        <h2 id="project-title">Point Source Audio</h2>
-        <button id="play-btn" class="btn-primary">Start Audio</button>
+        <h2 id="project-title">Soundmap Builder</h2>
+        <button id="mode-btn" class="btn-primary">Edit Mode</button>
+        <button id="play-btn" class="btn-secondary">Preview</button>
       </div>
       
       <div class="control-group">
@@ -22,19 +23,50 @@
         <span id="volume-value">80%</span>
       </div>
       
-      <div id="status" class="status-hidden">
+      <div id="edit-panel" class="control-group">
+        <h3>Add Audio Source</h3>
+        <input type="text" id="source-name" placeholder="Source name">
+        <input type="file" id="audio-file" accept="audio/*">
+        <input type="number" id="max-distance" placeholder="Max distance (m)" value="500">
+        <button id="add-source" class="btn-secondary">Add to Map</button>
+        <p style="font-size: 11px; color: #666; margin-top: 8px;">
+          Click "Add to Map" then click on the map to place the source
+        </p>
+      </div>
+      
+      <div id="sources-list" class="control-group">
+        <h3>Audio Sources</h3>
+        <div id="source-items"></div>
+      </div>
+      
+      <div id="status" class="control-group status-hidden">
+        <div class="status-item">
+          <span class="label">Mode:</span>
+          <span id="current-mode">Edit</span>
+        </div>
         <div class="status-item">
           <span class="label">Distance:</span>
-          <span id="current-zone">Move mouse over map</span>
+          <span id="distance-display">-</span>
         </div>
       </div>
       
       <div class="control-group">
-        <p style="font-size: 13px; color: #999; line-height: 1.5;">
-          <strong>Instructions:</strong><br>
-          1. Click "Start Audio"<br>
-          2. Move your mouse cursor over the map<br>
-          3. Audio volume and filtering adjust based on distance from red source point
+        <button id="export-config" class="btn-secondary">Export Config</button>
+        <button id="save-to-r2" class="btn-secondary">Save to R2</button>
+      </div>
+      
+      <div class="control-group">
+        <h3>Instructions</h3>
+        <p style="font-size: 12px; color: #999; line-height: 1.6;">
+          <strong>Edit Mode:</strong><br>
+          • Add audio sources with the form above<br>
+          • Click map to place new sources<br>
+          • Drag existing sources to reposition<br>
+          • Right-click sources to delete<br>
+          <br>
+          <strong>Preview Mode:</strong><br>
+          • Move mouse to hear spatial audio<br>
+          • Audio adjusts by distance & direction
         </p>
       </div>
     </div>
@@ -43,21 +75,20 @@
   </div>
   
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="js/soundmap-engine.js"></script>
+  <script src="js/soundmap-builder.js"></script>
   
   <script>
-    let soundmapPlayer;
+    let soundmapBuilder;
     
-    fetch('assets/config/template.json')
-      .then(res => res.json())
-      .then(config => {
-        soundmapPlayer = new SoundmapPlayer('map', config);
-        soundmapPlayer.init();
-      })
-      .catch(err => {
-        console.error('Failed to load config:', err);
-        alert('Configuration file not found');
-      });
+    // Start with empty project or load existing
+    const defaultConfig = {
+      title: "New Soundmap",
+      mapCenter: [51.5074, -0.1278],
+      audioSources: []
+    };
+    
+    soundmapBuilder = new SoundmapBuilder('map', defaultConfig);
+    soundmapBuilder.init();
   </script>
 </body>
 </html>
