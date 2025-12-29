@@ -13,7 +13,7 @@
         [51.500, -0.135]
       ],
       "audio": {
-        "url": "https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/Central Clip.mp3",
+        "url": "https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/central-clip.mp3",
         "fadeIn": 2,
         "fadeOut": 2,
         "volume": 0.6,
@@ -32,7 +32,7 @@
         [51.505, -0.130]
       ],
       "audio": {
-        "url": "https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/Central Clip.mp3",
+        "url": "https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/central-clip.mp3",
         "fadeIn": 1.5,
         "fadeOut": 1.5,
         "volume": 0.8,
