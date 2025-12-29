@@ -119,15 +119,20 @@ class SoundmapPlayer {
       try {
         console.log('Loading audio:', zone.audio.url);
         
+        // Load audio buffer first
+        const buffer = new Tone.ToneAudioBuffer(zone.audio.url);
+        await buffer.load();
+        
+        console.log('Buffer loaded for:', zone.id);
+        
+        // Create player with loaded buffer
         const player = new Tone.Player({
-          url: zone.audio.url,
+          buffer: buffer,
           loop: zone.audio.loop !== false,
           volume: Tone.gainToDb(0)
         }).toDestination();
         
-        await player.load();
-        
-        console.log('Loaded:', zone.id);
+        console.log('Player created for:', zone.id);
         
         this.activeTracks.set(zone.id, {
           player: player,
