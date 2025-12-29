@@ -1,6 +1,6 @@
 /**
  * JnfH Soundmap Audio Engine
- * Handles audio zone triggering, crossfading, and spatial mixing
+ * Using native Web Audio API for better CORS compatibility
  */
 
 class SoundmapPlayer {
@@ -75,11 +75,10 @@ class SoundmapPlayer {
   setupAudioContext() {
     document.getElementById('play-btn').addEventListener('click', async () => {
       if (!this.audioContext) {
-        await Tone.start();
-        this.audioContext = Tone.getContext();
+        // Use native Web Audio API instead of Tone.js
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         console.log('Audio context started');
         
-        // Load audio zones AFTER context is ready
         await this.loadAudioZones();
         this.drawZones();
       }
@@ -117,29 +116,37 @@ class SoundmapPlayer {
     
     for (const zone of zones) {
       try {
-        console.log('Loading audio:', zone.audio.url);
+        console.log('Fetching audio:', zone.audio.url);
         
-        // Load audio buffer first
-        const buffer = new Tone.ToneAudioBuffer(zone.audio.url);
-        await buffer.load();
+        // Fetch audio file
+        const response = await fetch(zone.audio.url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
-        console.log('Buffer loaded for:', zone.id);
+        const arrayBuffer = await response.arrayBuffer();
+        console.log('Downloaded audio for:', zone.id);
         
-        // Create player with loaded buffer
-        const player = new Tone.Player({
-          buffer: buffer,
-          loop: zone.audio.loop !== false,
-          volume: Tone.gainToDb(0)
-        }).toDestination();
+        // Decode audio data
+        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+        console.log('Decoded audio for:', zone.id);
         
-        console.log('Player created for:', zone.id);
+        // Create gain node for volume control
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.value = 0; // Start silent
+        gainNode.connect(this.audioContext.destination);
         
         this.activeTracks.set(zone.id, {
-          player: player,
+          audioBuffer: audioBuffer,
+          gainNode: gainNode,
+          source: null,
           zone: zone,
           active: false,
-          targetVolume: zone.audio.volume || 0.8
+          targetVolume: zone.audio.volume || 0.8,
+          loop: zone.audio.loop !== false
         });
+        
+        console.log('Setup complete for:', zone.id);
       } catch (error) {
         console.error('Failed to load audio for zone:', zone.id, error);
       }
@@ -201,8 +208,9 @@ class SoundmapPlayer {
     document.getElementById('play-btn').textContent = 'Stop Audio';
     document.getElementById('status').classList.remove('status-hidden');
     
-    this.activeTracks.forEach(track => {
-      track.player.start();
+    // Start all audio sources
+    this.activeTracks.forEach((track, zoneId) => {
+      this.startAudioSource(track);
     });
     
     const pos = this.markers.listener.getLatLng();
@@ -217,13 +225,28 @@ class SoundmapPlayer {
     }
   }
   
+  startAudioSource(track) {
+    // Create new source node
+    const source = this.audioContext.createBufferSource();
+    source.buffer = track.audioBuffer;
+    source.loop = track.loop;
+    source.connect(track.gainNode);
+    source.start(0);
+    
+    track.source = source;
+  }
+  
   stopPlayback() {
     this.isPlaying = false;
     document.getElementById('play-btn').textContent = 'Start Audio';
     
+    // Stop all audio sources
     this.activeTracks.forEach(track => {
-      track.player.volume.rampTo(Tone.gainToDb(0), 1);
-      setTimeout(() => track.player.stop(), 1000);
+      if (track.source) {
+        track.source.stop();
+        track.source = null;
+      }
+      track.gainNode.gain.value = 0;
     });
     
     if (this.animationActive) {
@@ -268,22 +291,30 @@ class SoundmapPlayer {
     if (track.active) return;
     
     track.active = true;
-    const targetDb = Tone.gainToDb(track.targetVolume * this.masterVolume);
-    track.player.volume.rampTo(targetDb, this.crossfadeDuration);
+    const targetVolume = track.targetVolume * this.masterVolume;
+    const currentTime = this.audioContext.currentTime;
+    
+    track.gainNode.gain.cancelScheduledValues(currentTime);
+    track.gainNode.gain.setValueAtTime(track.gainNode.gain.value, currentTime);
+    track.gainNode.gain.linearRampToValueAtTime(targetVolume, currentTime + this.crossfadeDuration);
   }
   
   fadeOutTrack(track) {
     if (!track.active) return;
     
     track.active = false;
-    track.player.volume.rampTo(Tone.gainToDb(0), this.crossfadeDuration);
+    const currentTime = this.audioContext.currentTime;
+    
+    track.gainNode.gain.cancelScheduledValues(currentTime);
+    track.gainNode.gain.setValueAtTime(track.gainNode.gain.value, currentTime);
+    track.gainNode.gain.linearRampToValueAtTime(0, currentTime + this.crossfadeDuration);
   }
   
   updateMasterVolume() {
     this.activeTracks.forEach(track => {
       if (track.active) {
-        const targetDb = Tone.gainToDb(track.targetVolume * this.masterVolume);
-        track.player.volume.value = targetDb;
+        const targetVolume = track.targetVolume * this.masterVolume;
+        track.gainNode.gain.value = targetVolume;
       }
     });
   }
