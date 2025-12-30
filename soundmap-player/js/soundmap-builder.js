@@ -1,159 +1,552 @@
 /**
- * JnfH Soundmap Builder with Advanced Spatial Audio
+ * Spatial Audio Canvas Builder
+ * Simple interface for creating interactive spatial audio experiences
  */
 
-class SoundmapBuilder {
-  constructor(mapContainerId, config) {
-    this.mapContainer = mapContainerId;
-    this.config = config;
+class SpatialAudioBuilder {
+  constructor(canvasId, config) {
+    this.canvasId = canvasId;
+    this.config = config || {
+      title: "New Spatial Audio Canvas",
+      canvasWidth: 1920,
+      canvasHeight: 1080,
+      audioZones: []
+    };
+    
+    // Canvas
+    this.canvas = null;
+    this.ctx = null;
+    this.gridSize = 50;
+    
+    // Drawing state
+    this.currentTool = null;
+    this.isDrawing = false;
+    this.currentShape = null;
+    this.shapes = [];
+    this.nextZoneId = 1;
+    
+    // Audio
     this.audioContext = null;
     this.masterGainNode = null;
-    this.audioSources = new Map();
-    this.listenerPosition = null;
-    
-    // Reverb system
-    this.convolverNode = null;
-    this.reverbSendGain = null;
-    this.reverbEnabled = true;
-    this.reverbAmount = 1.0;
-    
-    this.mode = 'edit';
+    this.audioZones = new Map();
     this.isPlaying = false;
     this.masterVolume = 0.8;
-    this.fadeRadius = 500;
     this.fadeSpeed = 0.3;
-    this.smoothness = 0.15; // Smoothness factor for interpolation (lower = smoother, 0.05-0.3 range)
-    // Initialize smoothness from fadeSpeed (inverse relationship - faster fade = less smooth)
-    this.updateSmoothnessFromFadeSpeed();
+    this.smoothness = 0.15;
     
-    // Spatial audio settings
-    this.spatialAudioEnabled = true;
-    this.spatialAudioStrength = 1.0;
-    this.maxDistance = 1000;
-    
-    this.map = null;
-    this.sourceMarkers = [];
-    this.nextSourceId = 1;
-    this.pendingSource = null;
-    this.selectedSource = null;
-    
-    // Path drawing state
-    this.pathDrawingMode = false;
-    this.currentPathPoints = [];
-    this.pendingPath = null;
-    this.pathPolylines = [];
-    this.nextPathId = 1;
-    
-    // Animation loop for smooth fading
+    // Animation
     this.animationFrameId = null;
-    this.targetVolumes = new Map(); // Target volumes for each source (calculated from position)
-    this.targetPathVolumes = new Map(); // Target volumes for each path
+    this.targetVolumes = new Map();
+    
+    // Mode
+    this.mode = 'edit'; // 'edit' or 'preview'
+    this.pendingAudio = null;
   }
   
   async init() {
-    console.log('Initializing Soundmap Builder...');
+    console.log('Initializing Spatial Audio Builder...');
     
-    // Initialize audioPaths array if it doesn't exist
-    if (!this.config.audioPaths) {
-      this.config.audioPaths = [];
+    if (!this.config.audioZones) {
+      this.config.audioZones = [];
     }
     
-    this.initMap();
+    this.initCanvas();
     this.bindControls();
-    this.loadExistingSources();
-    this.loadExistingPaths();
+    this.loadExistingZones();
     
     console.log('Builder ready');
   }
   
-  initMap() {
-    const center = this.config.mapCenter || [51.5074, -0.1278];
+  initCanvas() {
+    this.canvas = document.getElementById(this.canvasId);
+    this.ctx = this.canvas.getContext('2d');
     
-    this.map = L.map(this.mapContainer, {
-      dragging: true,
-      doubleClickZoom: true,
-      scrollWheelZoom: true
-    }).setView(center, 15);
+    const container = document.getElementById('canvas-container');
+    this.canvas.width = container.clientWidth;
+    this.canvas.height = container.clientHeight;
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '� OpenStreetMap',
-      maxZoom: 19
-    }).addTo(this.map);
+    this.drawGrid();
     
-    // Click for placing sources only
-    this.map.on('click', (e) => {
-      if (this.mode === 'edit' && this.pendingSource) {
-        this.placeSource(e.latlng);
-      }
-    });
+    // Event listeners
+    this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+    this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+    this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+    this.canvas.addEventListener('click', (e) => this.handleClick(e));
     
-    // Mouse move for preview mode
-    this.map.on('mousemove', (e) => {
-      if (this.mode === 'preview' && this.isPlaying) {
-        this.updateListenerPosition(e.latlng.lat, e.latlng.lng);
-      }
+    window.addEventListener('resize', () => {
+      this.canvas.width = container.clientWidth;
+      this.canvas.height = container.clientHeight;
+      this.redraw();
     });
   }
   
+  drawGrid() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    // Draw grid
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1;
+    
+    // Vertical lines
+    for (let x = 0; x <= this.canvas.width; x += this.gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, this.canvas.height);
+      ctx.stroke();
+    }
+    
+    // Horizontal lines
+    for (let y = 0; y <= this.canvas.height; y += this.gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(this.canvas.width, y);
+      ctx.stroke();
+    }
+    
+    // Coordinate labels every 100px
+    ctx.fillStyle = '#444';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    
+    for (let x = 0; x <= this.canvas.width; x += 100) {
+      ctx.fillText(x.toString(), x + 2, 2);
+    }
+    for (let y = 0; y <= this.canvas.height; y += 100) {
+      ctx.fillText(y.toString(), 2, y + 2);
+    }
+  }
+  
+  redraw() {
+    this.drawGrid();
+    this.shapes.forEach(shape => this.drawShape(shape));
+  }
+  
+  drawShape(shape) {
+    const ctx = this.ctx;
+    ctx.save();
+    
+    ctx.strokeStyle = shape.color || '#667eea';
+    ctx.fillStyle = shape.fillColor || 'rgba(102, 126, 234, 0.2)';
+    ctx.lineWidth = 2;
+    
+    switch (shape.type) {
+      case 'rectangle':
+        this.drawRectangle(shape);
+        break;
+      case 'circle':
+        this.drawCircle(shape);
+        break;
+      case 'path':
+        this.drawPath(shape);
+        break;
+      case 'polygon':
+        this.drawPolygon(shape);
+        break;
+    }
+    
+    ctx.restore();
+  }
+  
+  drawRectangle(shape) {
+    const x = Math.min(shape.start.x, shape.end.x);
+    const y = Math.min(shape.start.y, shape.end.y);
+    const w = Math.abs(shape.end.x - shape.start.x);
+    const h = Math.abs(shape.end.y - shape.start.y);
+    
+    this.ctx.fillRect(x, y, w, h);
+    this.ctx.strokeRect(x, y, w, h);
+  }
+  
+  drawCircle(shape) {
+    const radius = Math.sqrt(
+      Math.pow(shape.end.x - shape.start.x, 2) + 
+      Math.pow(shape.end.y - shape.start.y, 2)
+    );
+    
+    this.ctx.beginPath();
+    this.ctx.arc(shape.start.x, shape.start.y, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.stroke();
+  }
+  
+  drawPath(shape) {
+    if (shape.points.length < 2) return;
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(shape.points[0].x, shape.points[0].y);
+    for (let i = 1; i < shape.points.length; i++) {
+      this.ctx.lineTo(shape.points[i].x, shape.points[i].y);
+    }
+    this.ctx.stroke();
+  }
+  
+  drawPolygon(shape) {
+    if (shape.points.length < 3) return;
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(shape.points[0].x, shape.points[0].y);
+    for (let i = 1; i < shape.points.length; i++) {
+      this.ctx.lineTo(shape.points[i].x, shape.points[i].y);
+    }
+    this.ctx.closePath();
+    this.ctx.fill();
+    this.ctx.stroke();
+  }
+  
+  getMousePos(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  }
+  
+  handleMouseDown(e) {
+    if (this.mode !== 'edit' || !this.currentTool) return;
+    
+    const pos = this.getMousePos(e);
+    this.isDrawing = true;
+    
+    if (this.currentTool === 'rectangle' || this.currentTool === 'circle') {
+      this.currentShape = {
+        type: this.currentTool,
+        start: pos,
+        end: pos,
+        color: '#667eea',
+        fillColor: 'rgba(102, 126, 234, 0.2)'
+      };
+    } else if (this.currentTool === 'path' || this.currentTool === 'polygon') {
+      this.currentShape = {
+        type: this.currentTool,
+        points: [pos],
+        color: '#667eea',
+        fillColor: 'rgba(102, 126, 234, 0.2)'
+      };
+    }
+  }
+  
+  handleMouseMove(e) {
+    const pos = this.getMousePos(e);
+    
+    if (this.mode === 'preview' && this.isPlaying) {
+      this.updateListenerPosition(pos.x, pos.y);
+      return;
+    }
+    
+    if (!this.isDrawing || !this.currentShape) return;
+    
+    if (this.currentTool === 'rectangle' || this.currentTool === 'circle') {
+      this.currentShape.end = pos;
+    } else if (this.currentTool === 'path') {
+      // Add point on move for freehand drawing
+      this.currentShape.points.push(pos);
+    }
+    
+    this.redraw();
+    if (this.currentShape) {
+      this.drawShape(this.currentShape);
+    }
+  }
+  
+  handleMouseUp(e) {
+    if (!this.isDrawing) return;
+    
+    this.isDrawing = false;
+    
+    if (this.currentTool === 'polygon') {
+      const pos = this.getMousePos(e);
+      this.currentShape.points.push(pos);
+      this.redraw();
+      if (this.currentShape) {
+        this.drawShape(this.currentShape);
+      }
+    }
+  }
+  
+  handleClick(e) {
+    if (this.mode !== 'edit' || !this.currentTool) return;
+    
+    if (this.currentTool === 'polygon' && this.currentShape && !this.isDrawing) {
+      // Continue adding points to polygon
+      const pos = this.getMousePos(e);
+      this.currentShape.points.push(pos);
+      this.redraw();
+      if (this.currentShape) {
+        this.drawShape(this.currentShape);
+      }
+    }
+  }
+  
+  selectTool(tool) {
+    this.currentTool = tool;
+    
+    // Update button states
+    document.querySelectorAll('[id^="tool-"]').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    if (tool) {
+      document.getElementById(`tool-${tool}`).classList.add('active');
+      this.canvas.style.cursor = 'crosshair';
+    } else {
+      this.canvas.style.cursor = 'default';
+    }
+    
+    // Clear current shape if switching tools
+    if (this.currentShape && this.currentTool !== tool) {
+      this.currentShape = null;
+      this.redraw();
+    }
+  }
+  
+  finishShape() {
+    if (!this.currentShape) return;
+    
+    // Finalize the shape
+    if (this.currentTool === 'path' && this.currentShape.points.length < 2) {
+      alert('Path needs at least 2 points');
+      return;
+    }
+    if (this.currentTool === 'polygon' && this.currentShape.points.length < 3) {
+      alert('Polygon needs at least 3 points');
+      return;
+    }
+    
+    this.shapes.push(this.currentShape);
+    this.currentShape = null;
+    this.selectTool(null);
+    this.redraw();
+  }
+  
+  async loadR2File() {
+    const r2Url = document.getElementById('r2-url').value.trim();
+    
+    if (!r2Url) {
+      alert('Please enter an R2 URL');
+      return;
+    }
+    
+    try {
+      const response = await fetch(r2Url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      this.pendingAudio = {
+        data: arrayBuffer,
+        url: r2Url,
+        fileName: r2Url.split('/').pop()
+      };
+      
+      alert('File loaded from R2 successfully!');
+    } catch (error) {
+      console.error('Error loading R2 file:', error);
+      alert('Failed to load file from R2: ' + error.message);
+    }
+  }
+  
+  async assignAudioToShape() {
+    if (this.shapes.length === 0) {
+      alert('Please draw a shape first');
+      return;
+    }
+    
+    const name = document.getElementById('source-name').value.trim();
+    if (!name) {
+      alert('Please enter a shape name');
+      return;
+    }
+    
+    const sourceType = document.getElementById('audio-source-type').value;
+    let audioData = null;
+    let audioUrl = null;
+    let fileName = null;
+    
+    if (sourceType === 'upload') {
+      const fileInput = document.getElementById('audio-file');
+      if (!fileInput.files[0]) {
+        alert('Please select an audio file');
+        return;
+      }
+      const file = fileInput.files[0];
+      audioData = await file.arrayBuffer();
+      fileName = file.name;
+    } else if (sourceType === 'r2') {
+      if (!this.pendingAudio) {
+        alert('Please load a file from R2 first');
+        return;
+      }
+      audioData = this.pendingAudio.data;
+      audioUrl = this.pendingAudio.url;
+      fileName = this.pendingAudio.fileName;
+    }
+    
+    const fadeDistance = parseInt(document.getElementById('fade-distance').value) || 100;
+    
+    // Get the last drawn shape
+    const shape = this.shapes[this.shapes.length - 1];
+    
+    const zoneId = `zone-${this.nextZoneId++}`;
+    const zone = {
+      id: zoneId,
+      name: name,
+      shape: shape,
+      audio: {
+        data: audioData,
+        url: audioUrl,
+        fileName: fileName,
+        fadeDistance: fadeDistance,
+        volume: 0.8,
+        loop: true
+      },
+      color: this.getRandomColor()
+    };
+    
+    // Update shape color
+    shape.color = zone.color;
+    shape.fillColor = zone.color.replace(')', ', 0.2)').replace('rgb', 'rgba');
+    if (!shape.fillColor.includes('rgba')) {
+      shape.fillColor = this.hexToRgba(zone.color, 0.2);
+    }
+    
+    this.config.audioZones.push(zone);
+    this.redraw();
+    
+    // Reset form
+    document.getElementById('source-name').value = '';
+    document.getElementById('audio-file').value = '';
+    document.getElementById('r2-url').value = '';
+    this.pendingAudio = null;
+    
+    this.updateZonesList();
+    
+    console.log('Zone created:', zoneId);
+  }
+  
+  hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  
+  loadExistingZones() {
+    if (this.config.audioZones) {
+      this.config.audioZones.forEach(zone => {
+        this.shapes.push(zone.shape);
+        this.nextZoneId = Math.max(this.nextZoneId, parseInt(zone.id.replace('zone-', '')) + 1);
+      });
+      this.redraw();
+      this.updateZonesList();
+    }
+  }
+  
+  updateZonesList() {
+    const container = document.getElementById('source-items');
+    const countEl = document.getElementById('source-count');
+    
+    if (countEl) {
+      countEl.textContent = this.config.audioZones.length;
+    }
+    
+    if (container) {
+      container.innerHTML = '';
+      
+      if (this.config.audioZones.length === 0) {
+        container.innerHTML = '<p style="font-size: 12px; color: #666;">No audio zones added yet</p>';
+        return;
+      }
+      
+      this.config.audioZones.forEach(zone => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px;';
+        item.innerHTML = `
+          <div style="color: ${zone.color}; font-weight: 600;">${zone.name}</div>
+          <div style="color: #999; margin-top: 4px;">Fade: ${zone.audio.fadeDistance}px</div>
+        `;
+        container.appendChild(item);
+      });
+    }
+  }
+  
   bindControls() {
+    // Mode toggle
     document.getElementById('mode-btn').addEventListener('click', () => {
       this.toggleMode();
     });
     
+    // Play/Preview
     document.getElementById('play-btn').addEventListener('click', async () => {
       await this.togglePreview();
     });
     
-    document.getElementById('add-source').addEventListener('click', () => {
-      this.prepareNewSource();
+    // Drawing tools
+    document.getElementById('tool-path').addEventListener('click', () => {
+      this.selectTool('path');
+    });
+    document.getElementById('tool-rectangle').addEventListener('click', () => {
+      this.selectTool('rectangle');
+    });
+    document.getElementById('tool-circle').addEventListener('click', () => {
+      this.selectTool('circle');
+    });
+    document.getElementById('tool-polygon').addEventListener('click', () => {
+      this.selectTool('polygon');
     });
     
-    document.getElementById('add-path').addEventListener('click', () => {
-      this.prepareNewPath();
+    // Finish shape button (for paths/polygons)
+    const finishBtn = document.createElement('button');
+    finishBtn.id = 'finish-shape';
+    finishBtn.className = 'btn-secondary';
+    finishBtn.textContent = 'Finish Shape';
+    finishBtn.style.display = 'none';
+    finishBtn.addEventListener('click', () => {
+      this.finishShape();
+      finishBtn.style.display = 'none';
+    });
+    document.getElementById('edit-panel').appendChild(finishBtn);
+    this.finishBtn = finishBtn;
+    
+    // Audio source type
+    document.getElementById('audio-source-type').addEventListener('change', (e) => {
+      const type = e.target.value;
+      document.getElementById('upload-source').style.display = type === 'upload' ? 'block' : 'none';
+      document.getElementById('r2-source').style.display = type === 'r2' ? 'block' : 'none';
     });
     
-    document.getElementById('finish-path').addEventListener('click', () => {
-      this.finishPath();
+    // Load R2 file
+    document.getElementById('load-r2-file').addEventListener('click', async () => {
+      await this.loadR2File();
     });
     
-    document.getElementById('cancel-path').addEventListener('click', () => {
-      this.cancelPath();
+    // Assign audio
+    document.getElementById('assign-audio').addEventListener('click', async () => {
+      await this.assignAudioToShape();
     });
     
-    // Volume control
-    const volumeSlider = document.getElementById('master-volume');
-    volumeSlider.addEventListener('input', (e) => {
+    // Volume controls
+    document.getElementById('master-volume').addEventListener('input', (e) => {
       this.masterVolume = e.target.value / 100;
       document.getElementById('volume-value').textContent = e.target.value + '%';
-      this.updateMasterVolume();
-    });
-    
-    // Fade radius
-    const fadeRadiusSlider = document.getElementById('fade-radius');
-    fadeRadiusSlider.addEventListener('input', (e) => {
-      this.fadeRadius = parseInt(e.target.value);
-      document.getElementById('fade-radius-value').textContent = e.target.value + 'm';
-      this.updateSourceRings();
-    });
-    
-    // Fade speed (controls smoothness of interpolation)
-    const fadeSpeedSlider = document.getElementById('fade-speed');
-    fadeSpeedSlider.addEventListener('input', (e) => {
-      this.fadeSpeed = parseFloat(e.target.value);
-      document.getElementById('fade-speed-value').textContent = e.target.value + 's';
-      this.updateSmoothnessFromFadeSpeed();
-    });
-    
-    // Reverb amount
-    const reverbSlider = document.getElementById('reverb-amount');
-    reverbSlider.addEventListener('input', (e) => {
-      this.reverbAmount = e.target.value / 100;
-      document.getElementById('reverb-value').textContent = e.target.value + '%';
-      if (this.reverbSendGain) {
-        this.reverbSendGain.gain.value = this.reverbAmount * 0.25;
+      if (this.masterGainNode) {
+        this.masterGainNode.gain.value = this.masterVolume;
       }
     });
     
+    document.getElementById('fade-radius').addEventListener('input', (e) => {
+      document.getElementById('fade-radius-value').textContent = e.target.value + 'px';
+    });
+    
+    document.getElementById('fade-speed').addEventListener('input', (e) => {
+      this.fadeSpeed = parseFloat(e.target.value);
+      document.getElementById('fade-speed-value').textContent = e.target.value + 's';
+      this.smoothness = Math.max(0.05, Math.min(0.3, this.fadeSpeed * 0.3));
+    });
+    
+    // Export
     document.getElementById('export-config').addEventListener('click', () => {
       this.exportConfig();
     });
@@ -170,588 +563,18 @@ class SoundmapBuilder {
       btn.classList.add('btn-primary');
       btn.classList.remove('btn-secondary');
       editPanel.style.display = 'block';
-      this.enableSourceDragging();
-      // Cancel any path drawing in progress
-      if (this.pathDrawingMode) {
-        this.cancelPath();
-      }
-      // Disable map dragging in edit mode to allow marker dragging
-      this.map.dragging.disable();
+      this.canvas.style.cursor = this.currentTool ? 'crosshair' : 'default';
     } else {
       btn.textContent = 'Preview Mode';
       btn.classList.remove('btn-primary');
       btn.classList.add('btn-secondary');
       editPanel.style.display = 'none';
-      this.disableSourceDragging();
-      // Cancel any path drawing in progress
-      if (this.pathDrawingMode) {
-        this.cancelPath();
-      }
-      // Enable map dragging in preview mode
-      this.map.dragging.enable();
+      this.canvas.style.cursor = 'default';
+      this.selectTool(null);
     }
     
     document.getElementById('current-mode').textContent = 
       this.mode === 'edit' ? 'Edit' : 'Preview';
-  }
-  
-  prepareNewSource() {
-    const nameInput = document.getElementById('source-name');
-    const fileInput = document.getElementById('audio-file');
-    const distanceInput = document.getElementById('max-distance');
-    
-    if (!nameInput.value || !fileInput.files[0]) {
-      alert('Please provide a name and select an audio file');
-      return;
-    }
-    
-    const file = fileInput.files[0];
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      this.pendingSource = {
-        name: nameInput.value,
-        audioData: e.target.result,
-        audioFile: file,
-        maxDistance: parseInt(distanceInput.value) || this.fadeRadius
-      };
-      
-      alert('Click on the map to place the audio source');
-      document.getElementById('map').style.cursor = 'crosshair';
-    };
-    
-    reader.readAsArrayBuffer(file);
-  }
-  
-  async placeSource(latlng) {
-    if (!this.pendingSource) return;
-    
-    const sourceId = `source-${this.nextSourceId++}`;
-    
-    const source = {
-      id: sourceId,
-      name: this.pendingSource.name,
-      position: [latlng.lat, latlng.lng],
-      audio: {
-        data: this.pendingSource.audioData,
-        fileName: this.pendingSource.audioFile.name,
-        maxDistance: this.pendingSource.maxDistance,
-        volume: 0.8,
-        loop: true
-      },
-      color: this.getRandomColor()
-    };
-    
-    this.config.audioSources.push(source);
-    this.createSourceMarker(source);
-    this.updateSourcesList();
-    
-    this.pendingSource = null;
-    document.getElementById('map').style.cursor = '';
-    document.getElementById('source-name').value = '';
-    document.getElementById('audio-file').value = '';
-    
-    console.log('Source placed:', sourceId);
-  }
-  
-  createSourceMarker(source) {
-    const marker = L.marker(source.position, {
-      icon: L.divIcon({
-        className: 'audio-source-marker',
-        html: `<div style="background: ${source.color}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-      }),
-      draggable: false // Will be enabled in edit mode
-    }).addTo(this.map);
-    
-    const ring = L.circle(source.position, {
-      radius: source.audio.maxDistance,
-      fillColor: source.color,
-      fillOpacity: 0.05,
-      color: source.color,
-      weight: 1,
-      opacity: 0.3,
-      dashArray: '5, 10',
-      interactive: false
-    }).addTo(this.map);
-    
-    // Popup with delete button
-    const popupContent = `
-      <div style="text-align: center;">
-        <strong>${source.name}</strong><br>
-        <small>Range: ${source.audio.maxDistance}m</small><br>
-        <button id="delete-${source.id}" style="
-          margin-top: 8px;
-          padding: 6px 12px;
-          background: #ff4444;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 12px;
-        ">Delete Source</button>
-      </div>
-    `;
-    
-    marker.bindPopup(popupContent);
-    
-    // Handle delete button click
-    marker.on('popupopen', () => {
-      const deleteBtn = document.getElementById(`delete-${source.id}`);
-      if (deleteBtn) {
-        deleteBtn.addEventListener('click', () => {
-          if (confirm(`Delete "${source.name}"?`)) {
-            this.deleteSource(source.id);
-            marker.closePopup();
-          }
-        });
-      }
-    });
-    
-    // Drag event
-    marker.on('drag', (e) => {
-      const pos = e.target.getLatLng();
-      source.position = [pos.lat, pos.lng];
-      ring.setLatLng(pos);
-    });
-    
-    // Click to select
-    marker.on('click', (e) => {
-      L.DomEvent.stopPropagation(e);
-      if (this.mode === 'edit') {
-        this.selectSource(source.id);
-      }
-    });
-    
-    this.sourceMarkers.push({ marker, ring, sourceId: source.id });
-  }
-  
-  selectSource(sourceId) {
-    this.selectedSource = sourceId;
-    
-    // Highlight selected marker
-    this.sourceMarkers.forEach(m => {
-      const source = this.config.audioSources.find(s => s.id === m.sourceId);
-      if (m.sourceId === sourceId) {
-        m.marker.setIcon(L.divIcon({
-          className: 'audio-source-marker',
-          html: `<div style="background: ${source.color}; width: 30px; height: 30px; border-radius: 50%; border: 4px solid yellow; box-shadow: 0 3px 10px rgba(255,255,0,0.6);"></div>`,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
-        }));
-      } else {
-        m.marker.setIcon(L.divIcon({
-          className: 'audio-source-marker',
-          html: `<div style="background: ${source.color}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        }));
-      }
-    });
-  }
-  
-  deleteSource(sourceId) {
-    this.config.audioSources = this.config.audioSources.filter(s => s.id !== sourceId);
-    
-    const markerObj = this.sourceMarkers.find(m => m.sourceId === sourceId);
-    if (markerObj) {
-      this.map.removeLayer(markerObj.marker);
-      this.map.removeLayer(markerObj.ring);
-      this.sourceMarkers = this.sourceMarkers.filter(m => m.sourceId !== sourceId);
-    }
-    
-    this.audioSources.delete(sourceId);
-    this.updateSourcesList();
-    
-    console.log('Deleted:', sourceId);
-  }
-  
-  loadExistingSources() {
-    this.config.audioSources.forEach(source => {
-      this.createSourceMarker(source);
-    });
-    this.updateSourcesList();
-  }
-  
-  loadExistingPaths() {
-    if (!this.config.audioPaths) return;
-    
-    this.config.audioPaths.forEach(path => {
-      this.createPathPolyline(path);
-      // Update nextPathId to avoid conflicts
-      const pathNum = parseInt(path.id.replace('path-', ''));
-      if (pathNum >= this.nextPathId) {
-        this.nextPathId = pathNum + 1;
-      }
-    });
-  }
-  
-  prepareNewPath() {
-    const nameInput = document.getElementById('path-name');
-    const fileInput = document.getElementById('path-audio-file');
-    const proximityInput = document.getElementById('path-proximity');
-    
-    if (!nameInput.value || !fileInput.files[0]) {
-      alert('Please provide a name and select an audio file');
-      return;
-    }
-    
-    const file = fileInput.files[0];
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      this.pendingPath = {
-        name: nameInput.value,
-        audioData: e.target.result,
-        audioFile: file,
-        proximityDistance: parseInt(proximityInput.value) || 500
-      };
-      
-      this.pathDrawingMode = true;
-      this.currentPathPoints = [];
-      this.pendingSource = null; // Cancel any pending source
-      
-      document.getElementById('add-path').style.display = 'none';
-      document.getElementById('finish-path').style.display = 'inline-block';
-      document.getElementById('cancel-path').style.display = 'inline-block';
-      document.getElementById('map').style.cursor = 'crosshair';
-      
-      alert('Click on the map to add points to the path. Double-click or click "Finish Path" when done.');
-    };
-    
-    reader.readAsArrayBuffer(file);
-  }
-  
-  addPathPoint(latlng) {
-    this.currentPathPoints.push([latlng.lat, latlng.lng]);
-    
-    // Draw a temporary polyline to show progress
-    if (this.tempPathPolyline) {
-      this.map.removeLayer(this.tempPathPolyline);
-    }
-    
-    if (this.currentPathPoints.length >= 2) {
-      this.tempPathPolyline = L.polyline(this.currentPathPoints, {
-        color: this.getRandomColor(),
-        weight: 4,
-        opacity: 0.7
-      }).addTo(this.map);
-    } else if (this.currentPathPoints.length === 1) {
-      // Add a marker for the first point
-      this.tempPathStartMarker = L.marker(this.currentPathPoints[0]).addTo(this.map);
-    }
-  }
-  
-  finishPath() {
-    if (this.currentPathPoints.length < 2) {
-      alert('Path needs at least 2 points');
-      return;
-    }
-    
-    if (!this.pendingPath) return;
-    
-    const pathId = `path-${this.nextPathId++}`;
-    
-    const path = {
-      id: pathId,
-      name: this.pendingPath.name,
-      points: this.currentPathPoints,
-      audio: {
-        data: this.pendingPath.audioData,
-        fileName: this.pendingPath.audioFile.name,
-        proximityDistance: this.pendingPath.proximityDistance,
-        volume: 0.8,
-        loop: true
-      },
-      color: this.getRandomColor()
-    };
-    
-    this.config.audioPaths.push(path);
-    this.createPathPolyline(path);
-    this.updateSourcesList();
-    
-    // Clean up
-    if (this.tempPathPolyline) {
-      this.map.removeLayer(this.tempPathPolyline);
-      this.tempPathPolyline = null;
-    }
-    if (this.tempPathStartMarker) {
-      this.map.removeLayer(this.tempPathStartMarker);
-      this.tempPathStartMarker = null;
-    }
-    
-    this.pendingPath = null;
-    this.pathDrawingMode = false;
-    this.currentPathPoints = [];
-    
-    document.getElementById('add-path').style.display = 'inline-block';
-    document.getElementById('finish-path').style.display = 'none';
-    document.getElementById('cancel-path').style.display = 'none';
-    document.getElementById('map').style.cursor = '';
-    document.getElementById('path-name').value = '';
-    document.getElementById('path-audio-file').value = '';
-    
-    console.log('Path created:', pathId);
-  }
-  
-  cancelPath() {
-    // Clean up temporary drawing
-    if (this.tempPathPolyline) {
-      this.map.removeLayer(this.tempPathPolyline);
-      this.tempPathPolyline = null;
-    }
-    if (this.tempPathStartMarker) {
-      this.map.removeLayer(this.tempPathStartMarker);
-      this.tempPathStartMarker = null;
-    }
-    
-    this.pendingPath = null;
-    this.pathDrawingMode = false;
-    this.currentPathPoints = [];
-    
-    document.getElementById('add-path').style.display = 'inline-block';
-    document.getElementById('finish-path').style.display = 'none';
-    document.getElementById('cancel-path').style.display = 'none';
-    document.getElementById('map').style.cursor = '';
-  }
-  
-  createPathPolyline(path) {
-    const polyline = L.polyline(path.points, {
-      color: path.color,
-      weight: 4,
-      opacity: 0.7
-    }).addTo(this.map);
-    
-    // Add popup with delete button
-    const popupContent = `
-      <div style="text-align: center;">
-        <strong>${path.name}</strong><br>
-        <small>Proximity: ${path.audio.proximityDistance}m</small><br>
-        <button id="delete-path-${path.id}" style="
-          margin-top: 8px;
-          padding: 6px 12px;
-          background: #ff4444;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 12px;
-        ">Delete Path</button>
-      </div>
-    `;
-    
-    polyline.bindPopup(popupContent);
-    
-    // Handle delete button click
-    polyline.on('popupopen', () => {
-      const deleteBtn = document.getElementById(`delete-path-${path.id}`);
-      if (deleteBtn) {
-        deleteBtn.addEventListener('click', () => {
-          if (confirm(`Delete "${path.name}"?`)) {
-            this.deletePath(path.id);
-            polyline.closePopup();
-          }
-        });
-      }
-    });
-    
-    this.pathPolylines.push({ polyline, pathId: path.id });
-  }
-  
-  deletePath(pathId) {
-    this.config.audioPaths = this.config.audioPaths.filter(p => p.id !== pathId);
-    
-    const polylineObj = this.pathPolylines.find(p => p.pathId === pathId);
-    if (polylineObj) {
-      this.map.removeLayer(polylineObj.polyline);
-      this.pathPolylines = this.pathPolylines.filter(p => p.pathId !== pathId);
-    }
-    
-    this.audioSources.delete(pathId); // Remove from audio sources if loaded
-    this.updateSourcesList();
-    
-    console.log('Deleted path:', pathId);
-  }
-  
-  calculateDistanceToPath(lat, lng, path) {
-    // Calculate distance from point to nearest point on path segments
-    let minDistance = Infinity;
-    
-    for (let i = 0; i < path.points.length - 1; i++) {
-      const p1 = path.points[i];
-      const p2 = path.points[i + 1];
-      
-      // Calculate distance to line segment
-      const dist = this.distanceToLineSegment(lat, lng, p1[0], p1[1], p2[0], p2[1]);
-      minDistance = Math.min(minDistance, dist);
-    }
-    
-    return minDistance;
-  }
-  
-  distanceToLineSegment(px, py, x1, y1, x2, y2) {
-    // Simplified approach: calculate distance to each point and approximate
-    // For more accuracy, we'd need proper great circle calculations
-    // This approximation works well for short segments
-    
-    const d1 = this.calculateDistance(px, py, x1, y1);
-    const d2 = this.calculateDistance(px, py, x2, y2);
-    const d12 = this.calculateDistance(x1, y1, x2, y2);
-    
-    // If segment is very short, return minimum distance to endpoints
-    if (d12 < 10) return Math.min(d1, d2);
-    
-    // Approximate distance using perpendicular distance calculation
-    // Convert lat/lng to approximate meters for calculation
-    const R = 6371000;
-    const toRad = (deg) => deg * (Math.PI / 180);
-    
-    const pxRad = toRad(px);
-    const pyRad = toRad(py);
-    const x1Rad = toRad(x1);
-    const y1Rad = toRad(y1);
-    const x2Rad = toRad(x2);
-    const y2Rad = toRad(y2);
-    
-    // Convert to approximate Cartesian (good for small distances)
-    const avgLat = (y1Rad + y2Rad) / 2;
-    const x1m = x1Rad * R * Math.cos(avgLat);
-    const y1m = y1Rad * R;
-    const x2m = x2Rad * R * Math.cos(avgLat);
-    const y2m = y2Rad * R;
-    const pxm = pxRad * R * Math.cos(avgLat);
-    const pym = pyRad * R;
-    
-    // Vector from p1 to p2
-    const dx = x2m - x1m;
-    const dy = y2m - y1m;
-    const segLenSq = dx * dx + dy * dy;
-    
-    if (segLenSq < 0.01) return d1;
-    
-    // Vector from p1 to point
-    const dpx = pxm - x1m;
-    const dpy = pym - y1m;
-    
-    // Projection parameter
-    const t = Math.max(0, Math.min(1, (dpx * dx + dpy * dy) / segLenSq));
-    
-    // Closest point on segment
-    const closestX = x1m + t * dx;
-    const closestY = y1m + t * dy;
-    
-    // Convert back to lat/lng
-    const closestLat = closestY / R;
-    const closestLng = closestX / (R * Math.cos(avgLat));
-    
-    // Return distance using haversine
-    return this.calculateDistance(px, py, closestLat * (180 / Math.PI), closestLng * (180 / Math.PI));
-  }
-  
-  enableSourceDragging() {
-    this.sourceMarkers.forEach(m => {
-      m.marker.dragging.enable();
-    });
-  }
-  
-  disableSourceDragging() {
-    this.sourceMarkers.forEach(m => {
-      m.marker.dragging.disable();
-    });
-  }
-  
-  updateSourceRings() {
-    this.sourceMarkers.forEach(markerObj => {
-      const source = this.config.audioSources.find(s => s.id === markerObj.sourceId);
-      if (source && source.audio.maxDistance !== this.fadeRadius) {
-        source.audio.maxDistance = this.fadeRadius;
-        this.map.removeLayer(markerObj.ring);
-        
-        markerObj.ring = L.circle(source.position, {
-          radius: this.fadeRadius,
-          fillColor: source.color,
-          fillOpacity: 0.05,
-          color: source.color,
-          weight: 1,
-          opacity: 0.3,
-          dashArray: '5, 10',
-          interactive: false
-        }).addTo(this.map);
-      }
-    });
-  }
-  
-  updateSourcesList() {
-    const container = document.getElementById('source-items');
-    const countEl = document.getElementById('source-count');
-    
-    if (countEl) {
-      countEl.textContent = this.config.audioSources.length;
-    }
-    
-    container.innerHTML = '';
-    
-    if (this.config.audioSources.length === 0 && (!this.config.audioPaths || this.config.audioPaths.length === 0)) {
-      container.innerHTML = '<p style="font-size: 12px; color: #666;">No sources or paths added yet</p>';
-    } else if (this.config.audioSources.length > 0) {
-      this.config.audioSources.forEach(source => {
-        const item = document.createElement('div');
-        item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px; cursor: pointer; border: 2px solid transparent;';
-        
-        item.innerHTML = `
-          <div style="color: ${source.color}; font-weight: 600;">${source.name}</div>
-          <div style="color: #999; margin-top: 4px;">Range: ${source.audio.maxDistance}m</div>
-        `;
-        
-        // Click to select
-        item.addEventListener('click', () => {
-          this.selectSource(source.id);
-          const markerObj = this.sourceMarkers.find(m => m.sourceId === source.id);
-          if (markerObj) {
-            this.map.setView(markerObj.marker.getLatLng(), this.map.getZoom());
-            markerObj.marker.openPopup();
-          }
-        });
-        
-        container.appendChild(item);
-      });
-    }
-    
-    // Update paths list
-    const pathContainer = document.getElementById('path-items');
-    const pathCountEl = document.getElementById('path-count');
-    
-    if (pathCountEl) {
-      pathCountEl.textContent = (this.config.audioPaths || []).length;
-    }
-    
-    if (pathContainer) {
-      pathContainer.innerHTML = '';
-      
-      if (this.config.audioPaths && this.config.audioPaths.length > 0) {
-        this.config.audioPaths.forEach(path => {
-          const item = document.createElement('div');
-          item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px; cursor: pointer; border: 2px solid transparent;';
-          
-          item.innerHTML = `
-            <div style="color: ${path.color}; font-weight: 600;">${path.name}</div>
-            <div style="color: #999; margin-top: 4px;">Proximity: ${path.audio.proximityDistance}m | Points: ${path.points.length}</div>
-          `;
-          
-          // Click to focus on path
-          item.addEventListener('click', () => {
-            const polylineObj = this.pathPolylines.find(p => p.pathId === path.id);
-            if (polylineObj) {
-              polylineObj.polyline.openPopup();
-              this.map.fitBounds(polylineObj.polyline.getBounds());
-            }
-          });
-          
-          pathContainer.appendChild(item);
-        });
-      }
-    }
   }
   
   async togglePreview() {
@@ -763,8 +586,8 @@ class SoundmapBuilder {
   }
   
   async startPreview() {
-    if (this.config.audioSources.length === 0) {
-      alert('Add some audio sources first');
+    if (this.config.audioZones.length === 0) {
+      alert('Add some audio zones first');
       return;
     }
     
@@ -777,25 +600,18 @@ class SoundmapBuilder {
     document.getElementById('play-btn').textContent = 'Stop Preview';
     document.getElementById('status').classList.remove('status-hidden');
     
-    // Initialize target volumes for ALL sources
-    this.targetVolumes.clear();
-    this.audioSources.forEach((audioSource, id) => {
-      // Ensure currentGain is initialized
-      if (typeof audioSource.currentGain === 'undefined') {
-        audioSource.currentGain = 0;
-      }
-      // Cancel any existing scheduled values and reset to 0
-      const currentTime = this.audioContext.currentTime;
-      audioSource.gainNode.gain.cancelScheduledValues(currentTime);
-      audioSource.gainNode.gain.setValueAtTime(0, currentTime);
-      // Set initial target volume to 0
-      this.targetVolumes.set(id, 0);
-      this.startAudioSource(audioSource);
+    // Start all audio sources
+    this.audioZones.forEach((zone) => {
+      this.startAudioSource(zone);
     });
     
-    console.log(`Initialized ${this.audioSources.size} audio sources for preview`);
+    // Initialize target volumes
+    this.targetVolumes.clear();
+    this.audioZones.forEach((zone, id) => {
+      this.targetVolumes.set(id, 0);
+    });
     
-    // Start animation loop for smooth fading
+    // Start animation loop
     this.startAnimationLoop();
     
     console.log('Preview started');
@@ -805,21 +621,17 @@ class SoundmapBuilder {
     this.isPlaying = false;
     document.getElementById('play-btn').textContent = 'Preview';
     
-    // Stop animation loop
     this.stopAnimationLoop();
     
-    this.audioSources.forEach((audioSource) => {
-      if (audioSource.source) {
-        audioSource.source.stop();
-        audioSource.source = null;
+    this.audioZones.forEach((zone) => {
+      if (zone.source) {
+        zone.source.stop();
+        zone.source = null;
       }
-    });
-    
-    // Reset all gains to 0
-    this.audioSources.forEach((audioSource) => {
-      audioSource.currentGain = 0;
-      audioSource.gainNode.gain.cancelScheduledValues(this.audioContext.currentTime);
-      audioSource.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      zone.currentGain = 0;
+      if (zone.gainNode) {
+        zone.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      }
     });
     
     this.targetVolumes.clear();
@@ -835,210 +647,223 @@ class SoundmapBuilder {
       this.audioContext.listener.positionX.value = 0;
       this.audioContext.listener.positionY.value = 0;
       this.audioContext.listener.positionZ.value = 0;
-      
       this.audioContext.listener.forwardX.value = 0;
       this.audioContext.listener.forwardY.value = 1;
       this.audioContext.listener.forwardZ.value = 0;
-      this.audioContext.listener.upX.value = 0;
-      this.audioContext.listener.upY.value = 0;
-      this.audioContext.listener.upZ.value = 1;
     }
-    
-    await this.initReverb();
-    console.log('Audio context initialized');
-  }
-  
-  async initReverb() {
-    if (!this.reverbEnabled) return;
-    
-    const sampleRate = this.audioContext.sampleRate;
-    const length = sampleRate * 2;
-    const impulse = this.audioContext.createBuffer(2, length, sampleRate);
-    const impulseL = impulse.getChannelData(0);
-    const impulseR = impulse.getChannelData(1);
-    
-    for (let i = 0; i < length; i++) {
-      const n = length - i;
-      impulseL[i] = (Math.random() * 2 - 1) * Math.pow(n / length, 2);
-      impulseR[i] = (Math.random() * 2 - 1) * Math.pow(n / length, 2);
-    }
-    
-    this.convolverNode = this.audioContext.createConvolver();
-    this.convolverNode.buffer = impulse;
-    this.convolverNode.normalize = true;
-    
-    this.reverbSendGain = this.audioContext.createGain();
-    this.reverbSendGain.gain.value = this.reverbAmount * 0.25;
-    
-    this.reverbSendGain.connect(this.convolverNode);
-    this.convolverNode.connect(this.masterGainNode);
-    
-    console.log('Reverb initialized');
   }
   
   async loadAudioBuffers() {
     console.log('Loading audio buffers...');
     
-    // Load point sources
-    for (const source of this.config.audioSources) {
+    for (const zone of this.config.audioZones) {
       try {
-        const audioBuffer = await this.audioContext.decodeAudioData(source.audio.data.slice(0));
+        const audioBuffer = await this.audioContext.decodeAudioData(zone.audio.data.slice(0));
         
         const panner = this.audioContext.createPanner();
         panner.panningModel = 'HRTF';
         panner.distanceModel = 'inverse';
         panner.refDistance = 1;
-        panner.maxDistance = this.maxDistance;
+        panner.maxDistance = 10000;
         panner.rolloffFactor = 1;
         
         const gainNode = this.audioContext.createGain();
         gainNode.gain.value = 0;
         
-        const reverbSend = this.audioContext.createGain();
-        reverbSend.gain.value = 0.3;
-        
         panner.connect(gainNode);
         gainNode.connect(this.masterGainNode);
         
-        if (this.reverbEnabled && this.reverbSendGain) {
-          panner.connect(reverbSend);
-          reverbSend.connect(this.reverbSendGain);
-        }
-        
-        const pos = this.latLngToXYZ(source.position[0], source.position[1]);
+        // Calculate center of shape for spatial positioning
+        const center = this.getShapeCenter(zone.shape);
+        const pos = this.canvasToXYZ(center.x, center.y);
         panner.setPosition(pos.x, pos.y, pos.z);
         
-        this.audioSources.set(source.id, {
-          config: source,
+        this.audioZones.set(zone.id, {
+          ...zone,
           audioBuffer: audioBuffer,
           source: null,
           panner: panner,
           gainNode: gainNode,
-          reverbSend: reverbSend,
-          currentGain: 0,
-          type: 'point' // Mark as point source
+          currentGain: 0
         });
         
-        console.log('Loaded:', source.id);
+        console.log('Loaded:', zone.id);
       } catch (error) {
-        console.error('Failed to load:', source.id, error);
+        console.error('Failed to load:', zone.id, error);
       }
+    }
+  }
+  
+  getShapeCenter(shape) {
+    switch (shape.type) {
+      case 'rectangle':
+        return {
+          x: (shape.start.x + shape.end.x) / 2,
+          y: (shape.start.y + shape.end.y) / 2
+        };
+      case 'circle':
+        return shape.start;
+      case 'path':
+      case 'polygon':
+        const sum = shape.points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+        return {
+          x: sum.x / shape.points.length,
+          y: sum.y / shape.points.length
+        };
+      default:
+        return { x: 0, y: 0 };
+    }
+  }
+  
+  canvasToXYZ(x, y) {
+    // Convert canvas coordinates to 3D space
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+    
+    return {
+      x: (x - centerX) * 0.01,
+      y: (y - centerY) * 0.01,
+      z: 0
+    };
+  }
+  
+  pointInShape(x, y, shape) {
+    switch (shape.type) {
+      case 'rectangle':
+        const rx = Math.min(shape.start.x, shape.end.x);
+        const ry = Math.min(shape.start.y, shape.end.y);
+        const rw = Math.abs(shape.end.x - shape.start.x);
+        const rh = Math.abs(shape.end.y - shape.start.y);
+        return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
+        
+      case 'circle':
+        const radius = Math.sqrt(
+          Math.pow(shape.end.x - shape.start.x, 2) + 
+          Math.pow(shape.end.y - shape.start.y, 2)
+        );
+        const dist = Math.sqrt(
+          Math.pow(x - shape.start.x, 2) + 
+          Math.pow(y - shape.start.y, 2)
+        );
+        return dist <= radius;
+        
+      case 'polygon':
+        return this.pointInPolygon(x, y, shape.points);
+        
+      case 'path':
+        // For paths, check distance to nearest point
+        return this.pointNearPath(x, y, shape.points, 50);
+        
+      default:
+        return false;
+    }
+  }
+  
+  pointInPolygon(x, y, points) {
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const xi = points[i].x, yi = points[i].y;
+      const xj = points[j].x, yj = points[j].y;
+      
+      const intersect = ((yi > y) !== (yj > y)) && 
+        (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  
+  pointNearPath(x, y, points, threshold) {
+    for (let i = 0; i < points.length - 1; i++) {
+      const dist = this.distanceToLineSegment(
+        x, y, 
+        points[i].x, points[i].y,
+        points[i + 1].x, points[i + 1].y
+      );
+      if (dist < threshold) return true;
+    }
+    return false;
+  }
+  
+  distanceToLineSegment(px, py, x1, y1, x2, y2) {
+    const A = px - x1;
+    const B = py - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+    
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    let param = -1;
+    
+    if (lenSq !== 0) param = dot / lenSq;
+    
+    let xx, yy;
+    
+    if (param < 0) {
+      xx = x1;
+      yy = y1;
+    } else if (param > 1) {
+      xx = x2;
+      yy = y2;
+    } else {
+      xx = x1 + param * C;
+      yy = y1 + param * D;
     }
     
-    // Load path audio
-    if (this.config.audioPaths) {
-      for (const path of this.config.audioPaths) {
-        try {
-          const audioBuffer = await this.audioContext.decodeAudioData(path.audio.data.slice(0));
-          
-          // For paths, we'll use the center point for spatial positioning
-          const centerLat = path.points.reduce((sum, p) => sum + p[0], 0) / path.points.length;
-          const centerLng = path.points.reduce((sum, p) => sum + p[1], 0) / path.points.length;
-          
-          const panner = this.audioContext.createPanner();
-          panner.panningModel = 'HRTF';
-          panner.distanceModel = 'inverse';
-          panner.refDistance = 1;
-          panner.maxDistance = this.maxDistance;
-          panner.rolloffFactor = 1;
-          
-          const gainNode = this.audioContext.createGain();
-          gainNode.gain.value = 0;
-          
-          const reverbSend = this.audioContext.createGain();
-          reverbSend.gain.value = 0.3;
-          
-          panner.connect(gainNode);
-          gainNode.connect(this.masterGainNode);
-          
-          if (this.reverbEnabled && this.reverbSendGain) {
-            panner.connect(reverbSend);
-            reverbSend.connect(this.reverbSendGain);
-          }
-          
-          const pos = this.latLngToXYZ(centerLat, centerLng);
-          panner.setPosition(pos.x, pos.y, pos.z);
-          
-          this.audioSources.set(path.id, {
-            config: path,
-            audioBuffer: audioBuffer,
-            source: null,
-            panner: panner,
-            gainNode: gainNode,
-            reverbSend: reverbSend,
-            currentGain: 0,
-            type: 'path' // Mark as path
-          });
-          
-          console.log('Loaded path:', path.id);
-        } catch (error) {
-          console.error('Failed to load path:', path.id, error);
-        }
-      }
-    }
+    const dx = px - xx;
+    const dy = py - yy;
+    return Math.sqrt(dx * dx + dy * dy);
   }
   
-  startAudioSource(audioSource) {
-    const source = this.audioContext.createBufferSource();
-    source.buffer = audioSource.audioBuffer;
-    source.loop = audioSource.config.audio.loop;
-    source.connect(audioSource.panner);
-    source.start(0);
-    audioSource.source = source;
-  }
-  
-  updateListenerPosition(lat, lng) {
+  updateListenerPosition(x, y) {
     if (!this.isPlaying) return;
     
-    this.listenerPosition = { lat, lng };
+    const pos = this.canvasToXYZ(x, y);
     
-    const listenerPos = this.latLngToXYZ(lat, lng);
-    
-    // Update listener position immediately for spatial audio
     if (this.audioContext.listener.positionX) {
-      this.audioContext.listener.positionX.value = listenerPos.x;
-      this.audioContext.listener.positionY.value = listenerPos.y;
-      this.audioContext.listener.positionZ.value = listenerPos.z;
+      this.audioContext.listener.positionX.value = pos.x;
+      this.audioContext.listener.positionY.value = pos.y;
+      this.audioContext.listener.positionZ.value = pos.z;
     }
     
     let nearestDistance = Infinity;
     
-    // Calculate target volumes based on distance (don't update gains directly)
-    this.audioSources.forEach((audioSource, id) => {
-      let distance;
-      let maxDist;
+    this.audioZones.forEach((zone, id) => {
+      const shape = zone.shape;
+      const fadeDistance = zone.audio.fadeDistance || 100;
       
-      if (audioSource.type === 'path') {
-        // Calculate distance to path
-        distance = this.calculateDistanceToPath(lat, lng, audioSource.config);
-        maxDist = audioSource.config.audio.proximityDistance || this.fadeRadius;
+      let distance = Infinity;
+      let targetVolume = 0;
+      
+      if (this.pointInShape(x, y, shape)) {
+        // Inside shape - full volume
+        targetVolume = zone.audio.volume * this.masterVolume;
+        distance = 0;
       } else {
-        // Point source - calculate distance to position
-        const sourcePos = audioSource.config.position;
-        distance = this.calculateDistance(lat, lng, sourcePos[0], sourcePos[1]);
-        maxDist = audioSource.config.audio.maxDistance || this.fadeRadius;
+        // Calculate distance to shape edge
+        const center = this.getShapeCenter(shape);
+        const dist = Math.sqrt(
+          Math.pow(x - center.x, 2) + 
+          Math.pow(y - center.y, 2)
+        );
+        distance = dist;
+        
+        if (dist < fadeDistance) {
+          const normalized = dist / fadeDistance;
+          const falloff = Math.pow(1 - normalized, 2);
+          targetVolume = falloff * zone.audio.volume * this.masterVolume;
+        }
       }
       
       if (distance < nearestDistance) {
         nearestDistance = distance;
       }
       
-      let targetVolume = 0;
-      
-      if (distance < maxDist) {
-        // Add minimum distance threshold to prevent jerky behavior at center
-        const minDistance = 1; // 1 meter minimum to stabilize calculations
-        const adjustedDistance = Math.max(distance, minDistance);
-        const normalized = adjustedDistance / maxDist;
-        const falloff = Math.pow(1 - normalized, 2.5); // Slightly steeper curve for better definition
-        targetVolume = falloff * audioSource.config.audio.volume * this.masterVolume;
-      }
-      
-      // Store target volume - animation loop will smoothly interpolate to it
       this.targetVolumes.set(id, targetVolume);
     });
     
-    document.getElementById('distance-display').textContent = `${Math.round(nearestDistance)}m`;
+    if (document.getElementById('distance-display')) {
+      document.getElementById('distance-display').textContent = `${Math.round(nearestDistance)}px`;
+    }
   }
   
   startAnimationLoop() {
@@ -1052,63 +877,36 @@ class SoundmapBuilder {
       
       const currentTime = this.audioContext.currentTime;
       
-      // Smoothly interpolate each source's gain toward its target volume
-      this.audioSources.forEach((audioSource, id) => {
-        // Safety check - ensure audioSource and gainNode exist
-        if (!audioSource || !audioSource.gainNode) {
-          console.warn('Missing audioSource or gainNode for:', id);
+      this.audioZones.forEach((zone, id) => {
+        if (!zone.gainNode) return;
+        
+        const targetVolume = this.targetVolumes.get(id) || 0;
+        const currentGain = zone.currentGain || 0;
+        
+        if (Math.abs(currentGain - targetVolume) < 0.001) {
+          zone.currentGain = targetVolume;
+          zone.gainNode.gain.setValueAtTime(targetVolume, currentTime);
           return;
         }
         
-        // Ensure this source has a target volume (initialize if missing)
-        if (!this.targetVolumes.has(id)) {
-          this.targetVolumes.set(id, 0);
-        }
-        
-        const targetVolume = this.targetVolumes.get(id);
-        
-        // Ensure currentGain is defined (initialize if missing)
-        if (typeof audioSource.currentGain === 'undefined') {
-          audioSource.currentGain = audioSource.gainNode.gain.value || 0;
-        }
-        const currentGain = audioSource.currentGain;
-        
-        // Use exponential interpolation for ultra-smooth fading
-        // The smoothness factor controls how fast we approach the target (0.05-0.3)
-        // Lower values = smoother but slower response
-        // Higher values = faster response but potentially less smooth
-        
-        // Only update if there's a meaningful difference (reduces unnecessary updates)
-        if (Math.abs(currentGain - targetVolume) < 0.0001) {
-          // Already at target (or very close) - no update needed
-          return;
-        }
-        
-        // Exponential interpolation toward target
-        // This creates buttery smooth transitions
         const diff = targetVolume - currentGain;
         let newGain = currentGain + (diff * this.smoothness);
         
-        // Clamp to target to prevent overshoot/undershoot
         if ((targetVolume > currentGain && newGain > targetVolume) || 
             (targetVolume < currentGain && newGain < targetVolume)) {
           newGain = targetVolume;
         }
         
-        // Allow going to zero for sources far away
         if (targetVolume === 0 && newGain < 0.001) {
           newGain = 0;
         }
         
-        // Update tracked gain value
-        audioSource.currentGain = newGain;
+        zone.currentGain = newGain;
         
-        // Set new value directly using setValueAtTime with currentTime
-        // This immediately sets the value without scheduling, overriding any previous scheduled values
         try {
-          audioSource.gainNode.gain.setValueAtTime(newGain, currentTime);
+          zone.gainNode.gain.setValueAtTime(newGain, currentTime);
         } catch (e) {
-          console.warn('Error updating gain for', id, ':', e);
+          console.warn('Error updating gain:', e);
         }
       });
       
@@ -1125,46 +923,13 @@ class SoundmapBuilder {
     }
   }
   
-  latLngToXYZ(lat, lng) {
-    const centerLat = this.config.mapCenter[0];
-    const centerLng = this.config.mapCenter[1];
-    
-    const x = (lng - centerLng) * 111320 * Math.cos(centerLat * Math.PI / 180);
-    const y = (lat - centerLat) * 110540;
-    
-    return { x, y, z: 0 };
-  }
-  
-  calculateDistance(lat1, lng1, lat2, lng2) {
-    const R = 6371000;
-    const dLat = this.toRad(lat2 - lat1);
-    const dLng = this.toRad(lng2 - lng1);
-    
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-  
-  toRad(degrees) {
-    return degrees * (Math.PI / 180);
-  }
-  
-  updateMasterVolume() {
-    if (this.masterGainNode) {
-      this.masterGainNode.gain.value = this.masterVolume;
-    }
-  }
-  
-  updateSmoothnessFromFadeSpeed() {
-    // Convert fade speed to smoothness factor
-    // Faster fade speed = less smooth (higher smoothness value)
-    // Slower fade speed = more smooth (lower smoothness value)
-    // Map fadeSpeed (0.05-1.0) to smoothness (0.05-0.3)
-    // Lower smoothness = smoother but slower response
-    this.smoothness = Math.max(0.05, Math.min(0.3, this.fadeSpeed * 0.3));
+  startAudioSource(zone) {
+    const source = this.audioContext.createBufferSource();
+    source.buffer = zone.audioBuffer;
+    source.loop = zone.audio.loop;
+    source.connect(zone.panner);
+    source.start(0);
+    zone.source = source;
   }
   
   getRandomColor() {
@@ -1177,37 +942,20 @@ class SoundmapBuilder {
       ...this.config,
       settings: {
         masterVolume: this.masterVolume,
-        fadeRadius: this.fadeRadius,
-        fadeSpeed: this.fadeSpeed,
-        reverbEnabled: this.reverbEnabled,
-        reverbAmount: this.reverbAmount,
-        spatialAudioEnabled: this.spatialAudioEnabled
+        fadeSpeed: this.fadeSpeed
       },
-      audioSources: this.config.audioSources.map(s => ({
-        id: s.id,
-        name: s.name,
-        position: s.position,
+      audioZones: this.config.audioZones.map(zone => ({
+        id: zone.id,
+        name: zone.name,
+        shape: zone.shape,
         audio: {
-          fileName: s.audio.fileName,
-          url: `https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/${s.audio.fileName}`,
-          maxDistance: s.audio.maxDistance,
-          volume: s.audio.volume,
-          loop: s.audio.loop
+          url: zone.audio.url,
+          fileName: zone.audio.fileName,
+          fadeDistance: zone.audio.fadeDistance,
+          volume: zone.audio.volume,
+          loop: zone.audio.loop
         },
-        color: s.color
-      })),
-      audioPaths: (this.config.audioPaths || []).map(p => ({
-        id: p.id,
-        name: p.name,
-        points: p.points,
-        audio: {
-          fileName: p.audio.fileName,
-          url: `https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/${p.audio.fileName}`,
-          proximityDistance: p.audio.proximityDistance,
-          volume: p.audio.volume,
-          loop: p.audio.loop
-        },
-        color: p.color
+        color: zone.color
       }))
     };
     
@@ -1217,10 +965,9 @@ class SoundmapBuilder {
     
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'soundmap-config.json';
+    a.download = 'spatial-audio-config.json';
     a.click();
     
     console.log('Config exported');
   }
 }
-
