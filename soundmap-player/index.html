@@ -23,21 +23,9 @@
       </div>
       
       <div class="control-group">
-        <label>Fade Distance</label>
-        <input type="range" id="fade-radius" min="50" max="500" value="100" step="10">
-        <span id="fade-radius-value">100px</span>
-      </div>
-      
-      <div class="control-group">
         <label>Fade Speed</label>
         <input type="range" id="fade-speed" min="0.05" max="1" value="0.3" step="0.05">
         <span id="fade-speed-value">0.3s</span>
-      </div>
-      
-      <div class="control-group">
-        <label>Reverb Amount</label>
-        <input type="range" id="reverb-amount" min="0" max="100" value="100">
-        <span id="reverb-value">100%</span>
       </div>
       
       <div id="edit-panel" class="control-group">
@@ -49,7 +37,7 @@
           <button id="tool-polygon" class="btn-secondary" style="flex: 1; min-width: 80px;">Polygon</button>
         </div>
         
-        <h3>Assign Audio to Shape</h3>
+        <h3 id="audio-form-title">Assign Audio to Shape</h3>
         <input type="text" id="source-name" placeholder="Shape name">
         
         <label style="margin-top: 12px; display: block;">Audio Source</label>
@@ -69,8 +57,9 @@
         
         <input type="number" id="fade-distance" placeholder="Fade distance (px)" value="100">
         <button id="assign-audio" class="btn-secondary">Assign Audio</button>
+        <button id="cancel-edit" class="btn-secondary" style="display: none; margin-top: 8px;">Cancel Edit</button>
         <p style="font-size: 11px; color: #666; margin-top: 8px;">
-          Select a drawing tool, draw a shape, then assign audio to it.
+          Select a drawing tool, draw a shape, then assign audio to it. Double-click a zone in the list to edit it.
         </p>
       </div>
       
@@ -98,22 +87,25 @@
         <h3>Instructions</h3>
         <p style="font-size: 12px; color: #999; line-height: 1.6;">
           <strong>Edit Mode:</strong><br>
-          � Upload audio file and enter name<br>
-          � Click "Add to Map"<br>
-          � Click map to place source<br>
-          � Drag sources to reposition<br>
-          � Right-click to delete<br>
+          • Select a drawing tool<br>
+          • Draw shapes on canvas<br>
+          • Assign audio (upload or R2)<br>
+          • Set fade distance<br>
+          • Double-click zones to edit<br>
+          <br>
+          <strong>Drawing:</strong><br>
+          • Rectangle/Circle: Click & drag<br>
+          • Path: Click & drag (freehand)<br>
+          • Polygon: Click points, double-click to finish<br>
           <br>
           <strong>Preview Mode:</strong><br>
-          � Move mouse to hear spatial audio<br>
-          � HRTF binaural positioning<br>
-          � Distance-based fading<br>
-          � Reverb send/return system<br>
+          • Move mouse to hear spatial audio<br>
+          • Audio plays when cursor is inside shapes<br>
+          • Smooth fading based on distance<br>
           <br>
           <strong>Export:</strong><br>
-          � Saves config as JSON<br>
-          � Upload audio files to R2 manually<br>
-          � Config references R2 URLs
+          • Saves config as JSON<br>
+          • Config references R2 URLs
         </p>
       </div>
     </div>
@@ -126,7 +118,7 @@
   <script src="js/soundmap-builder.js"></script>
   
   <script>
-    let soundmapBuilder;
+    let builder;
     
     const defaultConfig = {
       title: "New Soundmap",
@@ -135,8 +127,10 @@
       audioZones: []
     };
     
-    const builder = new SpatialAudioBuilder('canvas', defaultConfig);
-    builder.init();
+    window.addEventListener('DOMContentLoaded', async () => {
+      builder = new SpatialAudioBuilder('canvas', defaultConfig);
+      await builder.init();
+    });
   </script>
 </body>
 </html>

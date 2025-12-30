@@ -40,6 +40,7 @@ class SpatialAudioBuilder {
     // Mode
     this.mode = 'edit';
     this.pendingAudio = null;
+    this.editingZoneId = null;
   }
   
   async init() {
@@ -318,15 +319,21 @@ class SpatialAudioBuilder {
   }
   
   async assignAudioToShape() {
-    // Must have a finished shape ready
-    if (!this.currentShape) {
-      alert('Please draw a shape first');
-      return;
-    }
-    
     const name = document.getElementById('source-name').value.trim();
     if (!name) {
       alert('Please enter a shape name');
+      return;
+    }
+    
+    // If editing, update existing zone
+    if (this.editingZoneId) {
+      await this.updateZone(this.editingZoneId);
+      return;
+    }
+    
+    // Otherwise, assign to new shape
+    if (!this.currentShape) {
+      alert('Please draw a shape first');
       return;
     }
     
@@ -383,15 +390,83 @@ class SpatialAudioBuilder {
     
     // Clear current shape and reset form
     this.currentShape = null;
-    document.getElementById('source-name').value = '';
-    document.getElementById('audio-file').value = '';
-    document.getElementById('r2-url').value = '';
-    this.pendingAudio = null;
+    this.resetForm();
     
     this.redraw();
     this.updateZonesList();
     
     console.log('Zone created:', zoneId);
+  }
+  
+  async updateZone(zoneId) {
+    const zone = this.config.audioZones.find(z => z.id === zoneId);
+    if (!zone) return;
+    
+    const name = document.getElementById('source-name').value.trim();
+    if (!name) {
+      alert('Please enter a shape name');
+      return;
+    }
+    
+    const sourceType = document.getElementById('audio-source-type').value;
+    let audioData = zone.audio.data; // Keep existing data by default
+    let audioUrl = zone.audio.url;
+    let fileName = zone.audio.fileName;
+    
+    // Only update audio if changed
+    if (sourceType === 'upload') {
+      const fileInput = document.getElementById('audio-file');
+      if (fileInput.files[0]) {
+        const file = fileInput.files[0];
+        audioData = await file.arrayBuffer();
+        fileName = file.name;
+        audioUrl = null; // Clear R2 URL if uploading new file
+      }
+    } else if (sourceType === 'r2') {
+      if (this.pendingAudio && this.pendingAudio.url !== zone.audio.url) {
+        audioData = this.pendingAudio.data;
+        audioUrl = this.pendingAudio.url;
+        fileName = this.pendingAudio.fileName;
+      }
+    }
+    
+    const fadeDistance = parseInt(document.getElementById('fade-distance').value) || 100;
+    
+    // Update zone
+    zone.name = name;
+    zone.audio.data = audioData;
+    zone.audio.url = audioUrl;
+    zone.audio.fileName = fileName;
+    zone.audio.fadeDistance = fadeDistance;
+    
+    // If audio changed, need to reload it
+    if (this.audioZones.has(zoneId)) {
+      // Remove from audio zones map so it gets reloaded
+      const oldZone = this.audioZones.get(zoneId);
+      if (oldZone.source) {
+        oldZone.source.stop();
+      }
+      this.audioZones.delete(zoneId);
+    }
+    
+    // Reset form and exit edit mode
+    this.cancelEdit();
+    
+    this.redraw();
+    this.updateZonesList();
+    
+    console.log('Zone updated:', zoneId);
+  }
+  
+  resetForm() {
+    document.getElementById('source-name').value = '';
+    document.getElementById('audio-file').value = '';
+    document.getElementById('r2-url').value = '';
+    document.getElementById('fade-distance').value = '100';
+    document.getElementById('audio-source-type').value = 'upload';
+    document.getElementById('upload-source').style.display = 'block';
+    document.getElementById('r2-source').style.display = 'none';
+    this.pendingAudio = null;
   }
   
   hexToRgba(hex, alpha) {
@@ -429,14 +504,76 @@ class SpatialAudioBuilder {
       
       this.config.audioZones.forEach(zone => {
         const item = document.createElement('div');
-        item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px; cursor: pointer;';
+        item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background 0.2s;';
+        if (this.editingZoneId === zone.id) {
+          item.style.background = '#3a3a3a';
+          item.style.border = '2px solid #667eea';
+        }
         item.innerHTML = `
           <div style="color: ${zone.color}; font-weight: 600;">${zone.name}</div>
           <div style="color: #999; margin-top: 4px;">Fade: ${zone.audio.fadeDistance}px</div>
         `;
+        item.addEventListener('dblclick', () => {
+          this.editZone(zone.id);
+        });
+        item.addEventListener('mouseenter', () => {
+          if (this.editingZoneId !== zone.id) {
+            item.style.background = '#333';
+          }
+        });
+        item.addEventListener('mouseleave', () => {
+          if (this.editingZoneId !== zone.id) {
+            item.style.background = '#2a2a2a';
+          }
+        });
         container.appendChild(item);
       });
     }
+  }
+  
+  editZone(zoneId) {
+    const zone = this.config.audioZones.find(z => z.id === zoneId);
+    if (!zone) return;
+    
+    this.editingZoneId = zoneId;
+    
+    // Populate form with zone data
+    document.getElementById('source-name').value = zone.name;
+    document.getElementById('fade-distance').value = zone.audio.fadeDistance || 100;
+    
+    // Set audio source type based on whether it has a URL
+    if (zone.audio.url) {
+      document.getElementById('audio-source-type').value = 'r2';
+      document.getElementById('r2-url').value = zone.audio.url;
+      document.getElementById('upload-source').style.display = 'none';
+      document.getElementById('r2-source').style.display = 'block';
+      this.pendingAudio = {
+        data: zone.audio.data,
+        url: zone.audio.url,
+        fileName: zone.audio.fileName
+      };
+    } else {
+      document.getElementById('audio-source-type').value = 'upload';
+      document.getElementById('upload-source').style.display = 'block';
+      document.getElementById('r2-source').style.display = 'none';
+      document.getElementById('r2-url').value = '';
+    }
+    
+    // Update form title and button
+    document.getElementById('audio-form-title').textContent = 'Edit Audio Zone';
+    document.getElementById('assign-audio').textContent = 'Save Changes';
+    document.getElementById('cancel-edit').style.display = 'block';
+    
+    this.updateZonesList();
+  }
+  
+  cancelEdit() {
+    this.editingZoneId = null;
+    this.resetForm();
+    document.getElementById('audio-form-title').textContent = 'Assign Audio to Shape';
+    document.getElementById('assign-audio').textContent = 'Assign Audio';
+    document.getElementById('cancel-edit').style.display = 'none';
+    this.updateZonesList();
   }
   
   bindControls() {
@@ -481,6 +618,11 @@ class SpatialAudioBuilder {
       await this.assignAudioToShape();
     });
     
+    // Cancel edit
+    document.getElementById('cancel-edit').addEventListener('click', () => {
+      this.cancelEdit();
+    });
+    
     // Volume controls
     document.getElementById('master-volume').addEventListener('input', (e) => {
       this.masterVolume = e.target.value / 100;
@@ -488,10 +630,6 @@ class SpatialAudioBuilder {
       if (this.masterGainNode) {
         this.masterGainNode.gain.value = this.masterVolume;
       }
-    });
-    
-    document.getElementById('fade-radius').addEventListener('input', (e) => {
-      document.getElementById('fade-radius-value').textContent = e.target.value + 'px';
     });
     
     document.getElementById('fade-speed').addEventListener('input', (e) => {
