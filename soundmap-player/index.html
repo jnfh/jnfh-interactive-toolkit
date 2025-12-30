@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JnfH Soundmap Builder</title>
   
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="css/player.css">
 </head>
 <body>
@@ -24,9 +23,9 @@
       </div>
       
       <div class="control-group">
-        <label>Fade Radius</label>
-        <input type="range" id="fade-radius" min="100" max="1000" value="500" step="50">
-        <span id="fade-radius-value">500m</span>
+        <label>Fade Distance</label>
+        <input type="range" id="fade-radius" min="50" max="500" value="100" step="10">
+        <span id="fade-radius-value">100px</span>
       </div>
       
       <div class="control-group">
@@ -42,26 +41,21 @@
       </div>
       
       <div id="edit-panel" class="control-group">
-        <h3>Add Audio Source</h3>
-        <input type="text" id="source-name" placeholder="Source name">
+        <h3>Drawing Tools</h3>
+        <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+          <button id="tool-path" class="btn-secondary" style="flex: 1; min-width: 80px;">Path</button>
+          <button id="tool-rectangle" class="btn-secondary" style="flex: 1; min-width: 80px;">Rectangle</button>
+          <button id="tool-circle" class="btn-secondary" style="flex: 1; min-width: 80px;">Circle</button>
+          <button id="tool-polygon" class="btn-secondary" style="flex: 1; min-width: 80px;">Polygon</button>
+        </div>
+        
+        <h3>Assign Audio to Shape</h3>
+        <input type="text" id="source-name" placeholder="Shape name">
         <input type="file" id="audio-file" accept="audio/*">
-        <input type="number" id="max-distance" placeholder="Max distance (m)" value="500">
-        <button id="add-source" class="btn-secondary">Add Point Source</button>
+        <input type="number" id="fade-distance" placeholder="Fade distance (px)" value="100">
+        <button id="assign-audio" class="btn-secondary">Assign Audio</button>
         <p style="font-size: 11px; color: #666; margin-top: 8px;">
-          Click "Add Point Source" then click on the map to place the source
-        </p>
-        
-        <hr style="margin: 20px 0; border: none; border-top: 1px solid #444;">
-        
-        <h3>Add Audio Path</h3>
-        <input type="text" id="path-name" placeholder="Path name">
-        <input type="file" id="path-audio-file" accept="audio/*">
-        <input type="number" id="path-proximity" placeholder="Proximity distance (m)" value="500">
-        <button id="add-path" class="btn-secondary">Start Drawing Path</button>
-        <button id="finish-path" class="btn-secondary" style="display: none; margin-top: 8px;">Finish Path</button>
-        <button id="cancel-path" class="btn-secondary" style="display: none; margin-top: 8px; background: #666;">Cancel</button>
-        <p style="font-size: 11px; color: #666; margin-top: 8px;">
-          Click "Start Drawing Path", then click on the map to add points. Double-click or click "Finish Path" to complete.
+          Select a drawing tool, draw a shape, then assign audio to it.
         </p>
       </div>
       
@@ -111,10 +105,11 @@
       </div>
     </div>
     
-    <div id="map"></div>
+    <div id="canvas-container" style="position: relative; width: 100%; height: 100vh; background: #0a0a0a;">
+      <canvas id="canvas"></canvas>
+    </div>
   </div>
   
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/soundmap-builder.js"></script>
   
   <script>
@@ -122,12 +117,12 @@
     
     const defaultConfig = {
       title: "New Soundmap",
-      mapCenter: [51.5074, -0.1278],
-      audioSources: [],
-      audioPaths: []
+      canvasWidth: 1920,
+      canvasHeight: 1080,
+      audioZones: []
     };
     
-    soundmapBuilder = new SoundmapBuilder('map', defaultConfig);
+    soundmapBuilder = new SoundmapBuilder('canvas', defaultConfig);
     soundmapBuilder.init();
   </script>
 </body>
