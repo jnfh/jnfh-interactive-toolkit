@@ -22,7 +22,6 @@ class SpatialAudioBuilder {
     this.currentTool = null;
     this.isDrawing = false;
     this.currentShape = null;
-    this.shapes = [];
     this.nextZoneId = 1;
     
     // Audio
@@ -39,7 +38,7 @@ class SpatialAudioBuilder {
     this.targetVolumes = new Map();
     
     // Mode
-    this.mode = 'edit'; // 'edit' or 'preview'
+    this.mode = 'edit';
     this.pendingAudio = null;
   }
   
@@ -71,7 +70,7 @@ class SpatialAudioBuilder {
     this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
     this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
-    this.canvas.addEventListener('click', (e) => this.handleClick(e));
+    this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
     
     window.addEventListener('resize', () => {
       this.canvas.width = container.clientWidth;
@@ -84,7 +83,6 @@ class SpatialAudioBuilder {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     
-    // Draw grid
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 1;
     
@@ -104,7 +102,7 @@ class SpatialAudioBuilder {
       ctx.stroke();
     }
     
-    // Coordinate labels every 100px
+    // Coordinate labels
     ctx.fillStyle = '#444';
     ctx.font = '10px monospace';
     ctx.textAlign = 'left';
@@ -120,7 +118,10 @@ class SpatialAudioBuilder {
   
   redraw() {
     this.drawGrid();
-    this.shapes.forEach(shape => this.drawShape(shape));
+    this.config.audioZones.forEach(zone => this.drawShape(zone.shape));
+    if (this.currentShape) {
+      this.drawShape(this.currentShape);
+    }
   }
   
   drawShape(shape) {
@@ -133,66 +134,51 @@ class SpatialAudioBuilder {
     
     switch (shape.type) {
       case 'rectangle':
-        this.drawRectangle(shape);
+        const rx = Math.min(shape.start.x, shape.end.x);
+        const ry = Math.min(shape.start.y, shape.end.y);
+        const rw = Math.abs(shape.end.x - shape.start.x);
+        const rh = Math.abs(shape.end.y - shape.start.y);
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.strokeRect(rx, ry, rw, rh);
         break;
+        
       case 'circle':
-        this.drawCircle(shape);
+        const radius = Math.sqrt(
+          Math.pow(shape.end.x - shape.start.x, 2) + 
+          Math.pow(shape.end.y - shape.start.y, 2)
+        );
+        ctx.beginPath();
+        ctx.arc(shape.start.x, shape.start.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
         break;
+        
       case 'path':
-        this.drawPath(shape);
+        if (shape.points.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(shape.points[0].x, shape.points[0].y);
+          for (let i = 1; i < shape.points.length; i++) {
+            ctx.lineTo(shape.points[i].x, shape.points[i].y);
+          }
+          ctx.stroke();
+        }
         break;
+        
       case 'polygon':
-        this.drawPolygon(shape);
+        if (shape.points.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(shape.points[0].x, shape.points[0].y);
+          for (let i = 1; i < shape.points.length; i++) {
+            ctx.lineTo(shape.points[i].x, shape.points[i].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
         break;
     }
     
     ctx.restore();
-  }
-  
-  drawRectangle(shape) {
-    const x = Math.min(shape.start.x, shape.end.x);
-    const y = Math.min(shape.start.y, shape.end.y);
-    const w = Math.abs(shape.end.x - shape.start.x);
-    const h = Math.abs(shape.end.y - shape.start.y);
-    
-    this.ctx.fillRect(x, y, w, h);
-    this.ctx.strokeRect(x, y, w, h);
-  }
-  
-  drawCircle(shape) {
-    const radius = Math.sqrt(
-      Math.pow(shape.end.x - shape.start.x, 2) + 
-      Math.pow(shape.end.y - shape.start.y, 2)
-    );
-    
-    this.ctx.beginPath();
-    this.ctx.arc(shape.start.x, shape.start.y, radius, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.stroke();
-  }
-  
-  drawPath(shape) {
-    if (shape.points.length < 2) return;
-    
-    this.ctx.beginPath();
-    this.ctx.moveTo(shape.points[0].x, shape.points[0].y);
-    for (let i = 1; i < shape.points.length; i++) {
-      this.ctx.lineTo(shape.points[i].x, shape.points[i].y);
-    }
-    this.ctx.stroke();
-  }
-  
-  drawPolygon(shape) {
-    if (shape.points.length < 3) return;
-    
-    this.ctx.beginPath();
-    this.ctx.moveTo(shape.points[0].x, shape.points[0].y);
-    for (let i = 1; i < shape.points.length; i++) {
-      this.ctx.lineTo(shape.points[i].x, shape.points[i].y);
-    }
-    this.ctx.closePath();
-    this.ctx.fill();
-    this.ctx.stroke();
   }
   
   getMousePos(e) {
@@ -217,13 +203,25 @@ class SpatialAudioBuilder {
         color: '#667eea',
         fillColor: 'rgba(102, 126, 234, 0.2)'
       };
-    } else if (this.currentTool === 'path' || this.currentTool === 'polygon') {
+    } else if (this.currentTool === 'path') {
       this.currentShape = {
-        type: this.currentTool,
+        type: 'path',
         points: [pos],
         color: '#667eea',
         fillColor: 'rgba(102, 126, 234, 0.2)'
       };
+    } else if (this.currentTool === 'polygon') {
+      if (!this.currentShape) {
+        this.currentShape = {
+          type: 'polygon',
+          points: [pos],
+          color: '#667eea',
+          fillColor: 'rgba(102, 126, 234, 0.2)'
+        };
+      } else {
+        this.currentShape.points.push(pos);
+      }
+      this.redraw();
     }
   }
   
@@ -239,14 +237,10 @@ class SpatialAudioBuilder {
     
     if (this.currentTool === 'rectangle' || this.currentTool === 'circle') {
       this.currentShape.end = pos;
+      this.redraw();
     } else if (this.currentTool === 'path') {
-      // Add point on move for freehand drawing
       this.currentShape.points.push(pos);
-    }
-    
-    this.redraw();
-    if (this.currentShape) {
-      this.drawShape(this.currentShape);
+      this.redraw();
     }
   }
   
@@ -255,68 +249,43 @@ class SpatialAudioBuilder {
     
     this.isDrawing = false;
     
-    if (this.currentTool === 'polygon') {
-      const pos = this.getMousePos(e);
-      this.currentShape.points.push(pos);
-      this.redraw();
-      if (this.currentShape) {
-        this.drawShape(this.currentShape);
+    // For rectangle and circle, shape is complete on mouse up
+    if (this.currentTool === 'rectangle' || this.currentTool === 'circle') {
+      this.finishCurrentShape();
+    }
+    // Path finishes when mouse is released
+    else if (this.currentTool === 'path') {
+      if (this.currentShape.points.length >= 2) {
+        this.finishCurrentShape();
+      } else {
+        this.currentShape = null;
+        this.redraw();
       }
     }
+    // Polygon continues adding points on click, finishes on double-click
   }
   
-  handleClick(e) {
-    if (this.mode !== 'edit' || !this.currentTool) return;
+  handleDoubleClick(e) {
+    if (this.mode !== 'edit' || this.currentTool !== 'polygon') return;
     
-    if (this.currentTool === 'polygon' && this.currentShape && !this.isDrawing) {
-      // Continue adding points to polygon
-      const pos = this.getMousePos(e);
-      this.currentShape.points.push(pos);
-      this.redraw();
-      if (this.currentShape) {
-        this.drawShape(this.currentShape);
-      }
+    if (this.currentShape && this.currentShape.points.length >= 3) {
+      this.finishCurrentShape();
     }
   }
   
-  selectTool(tool) {
-    this.currentTool = tool;
-    
-    // Update button states
-    document.querySelectorAll('[id^="tool-"]').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    
-    if (tool) {
-      document.getElementById(`tool-${tool}`).classList.add('active');
-      this.canvas.style.cursor = 'crosshair';
-    } else {
-      this.canvas.style.cursor = 'default';
-    }
-    
-    // Clear current shape if switching tools
-    if (this.currentShape && this.currentTool !== tool) {
-      this.currentShape = null;
-      this.redraw();
-    }
-  }
-  
-  finishShape() {
+  finishCurrentShape() {
     if (!this.currentShape) return;
     
-    // Finalize the shape
-    if (this.currentTool === 'path' && this.currentShape.points.length < 2) {
-      alert('Path needs at least 2 points');
-      return;
-    }
-    if (this.currentTool === 'polygon' && this.currentShape.points.length < 3) {
-      alert('Polygon needs at least 3 points');
+    // Validate shape
+    if ((this.currentShape.type === 'path' && this.currentShape.points.length < 2) ||
+        (this.currentShape.type === 'polygon' && this.currentShape.points.length < 3)) {
+      this.currentShape = null;
+      this.redraw();
       return;
     }
     
-    this.shapes.push(this.currentShape);
-    this.currentShape = null;
-    this.selectTool(null);
+    // Shape is ready - keep it in currentShape until audio is assigned
+    // Don't add to shapes array yet - wait for audio assignment
     this.redraw();
   }
   
@@ -349,7 +318,8 @@ class SpatialAudioBuilder {
   }
   
   async assignAudioToShape() {
-    if (this.shapes.length === 0) {
+    // Must have a finished shape ready
+    if (!this.currentShape) {
       alert('Please draw a shape first');
       return;
     }
@@ -386,14 +356,18 @@ class SpatialAudioBuilder {
     
     const fadeDistance = parseInt(document.getElementById('fade-distance').value) || 100;
     
-    // Get the last drawn shape
-    const shape = this.shapes[this.shapes.length - 1];
-    
+    // Create zone with the current shape
     const zoneId = `zone-${this.nextZoneId++}`;
+    const color = this.getRandomColor();
+    
+    // Update shape with assigned color
+    this.currentShape.color = color;
+    this.currentShape.fillColor = this.hexToRgba(color, 0.2);
+    
     const zone = {
       id: zoneId,
       name: name,
-      shape: shape,
+      shape: this.currentShape,
       audio: {
         data: audioData,
         url: audioUrl,
@@ -402,25 +376,19 @@ class SpatialAudioBuilder {
         volume: 0.8,
         loop: true
       },
-      color: this.getRandomColor()
+      color: color
     };
     
-    // Update shape color
-    shape.color = zone.color;
-    shape.fillColor = zone.color.replace(')', ', 0.2)').replace('rgb', 'rgba');
-    if (!shape.fillColor.includes('rgba')) {
-      shape.fillColor = this.hexToRgba(zone.color, 0.2);
-    }
-    
     this.config.audioZones.push(zone);
-    this.redraw();
     
-    // Reset form
+    // Clear current shape and reset form
+    this.currentShape = null;
     document.getElementById('source-name').value = '';
     document.getElementById('audio-file').value = '';
     document.getElementById('r2-url').value = '';
     this.pendingAudio = null;
     
+    this.redraw();
     this.updateZonesList();
     
     console.log('Zone created:', zoneId);
@@ -436,7 +404,6 @@ class SpatialAudioBuilder {
   loadExistingZones() {
     if (this.config.audioZones) {
       this.config.audioZones.forEach(zone => {
-        this.shapes.push(zone.shape);
         this.nextZoneId = Math.max(this.nextZoneId, parseInt(zone.id.replace('zone-', '')) + 1);
       });
       this.redraw();
@@ -462,7 +429,7 @@ class SpatialAudioBuilder {
       
       this.config.audioZones.forEach(zone => {
         const item = document.createElement('div');
-        item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px;';
+        item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px; cursor: pointer;';
         item.innerHTML = `
           <div style="color: ${zone.color}; font-weight: 600;">${zone.name}</div>
           <div style="color: #999; margin-top: 4px;">Fade: ${zone.audio.fadeDistance}px</div>
@@ -496,19 +463,6 @@ class SpatialAudioBuilder {
     document.getElementById('tool-polygon').addEventListener('click', () => {
       this.selectTool('polygon');
     });
-    
-    // Finish shape button (for paths/polygons)
-    const finishBtn = document.createElement('button');
-    finishBtn.id = 'finish-shape';
-    finishBtn.className = 'btn-secondary';
-    finishBtn.textContent = 'Finish Shape';
-    finishBtn.style.display = 'none';
-    finishBtn.addEventListener('click', () => {
-      this.finishShape();
-      finishBtn.style.display = 'none';
-    });
-    document.getElementById('edit-panel').appendChild(finishBtn);
-    this.finishBtn = finishBtn;
     
     // Audio source type
     document.getElementById('audio-source-type').addEventListener('change', (e) => {
@@ -552,6 +506,30 @@ class SpatialAudioBuilder {
     });
   }
   
+  selectTool(tool) {
+    // If switching tools, clear current shape
+    if (this.currentTool !== tool && this.currentShape) {
+      this.currentShape = null;
+      this.redraw();
+    }
+    
+    this.currentTool = tool;
+    
+    // Update button states
+    document.querySelectorAll('[id^="tool-"]').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    if (tool) {
+      document.getElementById(`tool-${tool}`).classList.add('active');
+      if (this.mode === 'edit') {
+        this.canvas.style.cursor = 'crosshair';
+      }
+    } else {
+      this.canvas.style.cursor = 'default';
+    }
+  }
+  
   toggleMode() {
     this.mode = this.mode === 'edit' ? 'preview' : 'edit';
     
@@ -564,15 +542,22 @@ class SpatialAudioBuilder {
       btn.classList.remove('btn-secondary');
       editPanel.style.display = 'block';
       this.canvas.style.cursor = this.currentTool ? 'crosshair' : 'default';
+      // Clear any current shape when entering edit mode
+      if (this.currentShape && !this.config.audioZones.find(z => z.shape === this.currentShape)) {
+        this.currentShape = null;
+      }
     } else {
       btn.textContent = 'Preview Mode';
       btn.classList.remove('btn-primary');
       btn.classList.add('btn-secondary');
       editPanel.style.display = 'none';
       this.canvas.style.cursor = 'default';
-      this.selectTool(null);
+      // Clear drawing state
+      this.currentShape = null;
+      this.isDrawing = false;
     }
     
+    this.redraw();
     document.getElementById('current-mode').textContent = 
       this.mode === 'edit' ? 'Edit' : 'Preview';
   }
@@ -716,7 +701,6 @@ class SpatialAudioBuilder {
   }
   
   canvasToXYZ(x, y) {
-    // Convert canvas coordinates to 3D space
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
     
@@ -751,7 +735,6 @@ class SpatialAudioBuilder {
         return this.pointInPolygon(x, y, shape.points);
         
       case 'path':
-        // For paths, check distance to nearest point
         return this.pointNearPath(x, y, shape.points, 50);
         
       default:
@@ -835,11 +818,9 @@ class SpatialAudioBuilder {
       let targetVolume = 0;
       
       if (this.pointInShape(x, y, shape)) {
-        // Inside shape - full volume
         targetVolume = zone.audio.volume * this.masterVolume;
         distance = 0;
       } else {
-        // Calculate distance to shape edge
         const center = this.getShapeCenter(shape);
         const dist = Math.sqrt(
           Math.pow(x - center.x, 2) + 
