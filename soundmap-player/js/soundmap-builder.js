@@ -576,10 +576,17 @@ class SpatialAudioBuilder {
       return;
     }
     
+    // Stop any currently playing sources
+    if (this.isPlaying) {
+      this.stopPreview();
+    }
+    
     if (!this.audioContext) {
       await this.initAudioContext();
-      await this.loadAudioBuffers();
     }
+    
+    // Load any new zones that haven't been loaded yet
+    await this.loadNewAudioBuffers();
     
     this.isPlaying = true;
     document.getElementById('play-btn').textContent = 'Stop Preview';
@@ -638,11 +645,23 @@ class SpatialAudioBuilder {
     }
   }
   
-  async loadAudioBuffers() {
-    console.log('Loading audio buffers...');
+  async loadNewAudioBuffers() {
+    // Find zones that haven't been loaded yet
+    const zonesToLoad = this.config.audioZones.filter(zone => !this.audioZones.has(zone.id));
     
-    for (const zone of this.config.audioZones) {
+    if (zonesToLoad.length === 0) {
+      return; // All zones already loaded
+    }
+    
+    console.log(`Loading ${zonesToLoad.length} new audio buffer(s)...`);
+    
+    for (const zone of zonesToLoad) {
       try {
+        // Skip if already loaded
+        if (this.audioZones.has(zone.id)) {
+          continue;
+        }
+        
         const audioBuffer = await this.audioContext.decodeAudioData(zone.audio.data.slice(0));
         
         const panner = this.audioContext.createPanner();
