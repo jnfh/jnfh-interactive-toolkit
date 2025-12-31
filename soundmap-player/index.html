@@ -85,19 +85,8 @@
         </div>
         
         <div id="r2-source" style="display: none;">
-          <input type="text" id="r2-url" placeholder="R2 URL or Directory (e.g., https://pub-xxx.r2.dev/jnfh-audio/Notes/)">
-          <button id="load-r2-directory" class="btn-secondary" style="margin-top: 8px;">Load Directory</button>
-          <p style="font-size: 11px; color: #666; margin-top: 8px; line-height: 1.4;">
-            <strong>Tip:</strong> For automatic directory listing, create a <code>manifest.json</code> file in your R2 directory with:<br>
-            <code style="font-size: 10px;">{"files": ["file1.mp3", "file2.wav"]}</code>
-          </p>
-          <div id="r2-file-list" style="margin-top: 12px; display: none;">
-            <label style="display: block; margin-bottom: 8px; font-size: 12px; color: #999;">Select Audio File:</label>
-            <select id="r2-file-select" style="width: 100%; padding: 10px; background: #2a2a2a; border: 1px solid #444; border-radius: 6px; color: #e0e0e0; font-size: 13px; margin-bottom: 8px;">
-              <option value="">-- Select a file --</option>
-            </select>
-            <button id="load-r2-file" class="btn-secondary" style="margin-top: 8px;">Load Selected File</button>
-          </div>
+          <input type="text" id="r2-url" placeholder="R2 URL (e.g., https://pub-xxx.r2.dev/file.mp3)">
+          <button id="load-r2-file" class="btn-secondary" style="margin-top: 8px;">Load from R2</button>
         </div>
         
         <input type="number" id="fade-distance" placeholder="Fade distance (px)" value="100">
