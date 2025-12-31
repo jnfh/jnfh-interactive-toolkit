@@ -23,6 +23,8 @@ class SpatialAudioBuilder {
     this.isDrawing = false;
     this.currentShape = null;
     this.nextZoneId = 1;
+    this.smoothPath = false; // Toggle for smooth curves vs freehand
+    this.lineThickness = 2; // Default line thickness
     
     // Audio
     this.audioContext = null;
@@ -288,7 +290,7 @@ class SpatialAudioBuilder {
     
     ctx.strokeStyle = shapeColor;
     ctx.fillStyle = fillColor;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = shape.lineWidth || this.lineThickness || 2;
     
     let centerX = 0, centerY = 0;
     
@@ -321,9 +323,34 @@ class SpatialAudioBuilder {
         if (shape.points.length >= 2) {
           ctx.beginPath();
           ctx.moveTo(shape.points[0].x, shape.points[0].y);
-          for (let i = 1; i < shape.points.length; i++) {
-            ctx.lineTo(shape.points[i].x, shape.points[i].y);
+          
+          if (shape.smooth && shape.points.length >= 3) {
+            // Draw smooth curves using quadratic bezier curves
+            // Use Catmull-Rom spline approximation for smoother curves
+            for (let i = 0; i < shape.points.length - 1; i++) {
+              const p0 = i > 0 ? shape.points[i - 1] : shape.points[i];
+              const p1 = shape.points[i];
+              const p2 = shape.points[i + 1];
+              const p3 = i < shape.points.length - 2 ? shape.points[i + 2] : shape.points[i + 1];
+              
+              // Calculate control points for smooth curve
+              const cp1x = p1.x + (p2.x - p0.x) / 6;
+              const cp1y = p1.y + (p2.y - p0.y) / 6;
+              const cp2x = p2.x - (p3.x - p1.x) / 6;
+              const cp2y = p2.y - (p3.y - p1.y) / 6;
+              
+              if (i === 0) {
+                ctx.moveTo(p1.x, p1.y);
+              }
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+          } else {
+            // Draw straight lines (freehand)
+            for (let i = 1; i < shape.points.length; i++) {
+              ctx.lineTo(shape.points[i].x, shape.points[i].y);
+            }
           }
+          
           ctx.stroke();
           // Calculate center for path
           const pathSum = shape.points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
@@ -336,10 +363,30 @@ class SpatialAudioBuilder {
         if (shape.points.length >= 3) {
           ctx.beginPath();
           ctx.moveTo(shape.points[0].x, shape.points[0].y);
-          for (let i = 1; i < shape.points.length; i++) {
-            ctx.lineTo(shape.points[i].x, shape.points[i].y);
+          
+          if (shape.smooth && shape.points.length >= 3) {
+            // Draw smooth curves for polygon using quadratic curves
+            for (let i = 1; i < shape.points.length; i++) {
+              const prev = shape.points[i - 1];
+              const current = shape.points[i];
+              const next = shape.points[(i + 1) % shape.points.length];
+              
+              const cp1x = (prev.x + current.x) / 2;
+              const cp1y = (prev.y + current.y) / 2;
+              const cp2x = (current.x + next.x) / 2;
+              const cp2y = (current.y + next.y) / 2;
+              
+              ctx.quadraticCurveTo(current.x, current.y, cp2x, cp2y);
+            }
+            ctx.closePath();
+          } else {
+            // Draw straight lines
+            for (let i = 1; i < shape.points.length; i++) {
+              ctx.lineTo(shape.points[i].x, shape.points[i].y);
+            }
+            ctx.closePath();
           }
-          ctx.closePath();
+          
           ctx.fill();
           ctx.stroke();
           // Calculate center for polygon
@@ -387,14 +434,17 @@ class SpatialAudioBuilder {
         start: pos,
         end: pos,
         color: '#667eea',
-        fillColor: 'rgba(102, 126, 234, 0.2)'
+        fillColor: 'rgba(102, 126, 234, 0.2)',
+        lineWidth: this.lineThickness
       };
     } else if (this.currentTool === 'path') {
       this.currentShape = {
         type: 'path',
         points: [pos],
         color: '#667eea',
-        fillColor: 'rgba(102, 126, 234, 0.2)'
+        fillColor: 'rgba(102, 126, 234, 0.2)',
+        smooth: this.smoothPath,
+        lineWidth: this.lineThickness
       };
     } else if (this.currentTool === 'polygon') {
       if (!this.currentShape) {
@@ -402,7 +452,8 @@ class SpatialAudioBuilder {
           type: 'polygon',
           points: [pos],
           color: '#667eea',
-          fillColor: 'rgba(102, 126, 234, 0.2)'
+          fillColor: 'rgba(102, 126, 234, 0.2)',
+          lineWidth: this.lineThickness
         };
       } else {
         this.currentShape.points.push(pos);
@@ -437,8 +488,23 @@ class SpatialAudioBuilder {
       this.currentShape.end = pos;
       this.redraw();
     } else if (this.currentTool === 'path') {
-      this.currentShape.points.push(pos);
-      this.redraw();
+      // For smooth paths, only add points at intervals to avoid too many points
+      // For freehand, add every point
+      if (this.smoothPath) {
+        const lastPoint = this.currentShape.points[this.currentShape.points.length - 1];
+        const distance = Math.sqrt(
+          Math.pow(pos.x - lastPoint.x, 2) + 
+          Math.pow(pos.y - lastPoint.y, 2)
+        );
+        // Only add point if moved at least 5 pixels (smoother curves)
+        if (distance > 5) {
+          this.currentShape.points.push(pos);
+          this.redraw();
+        }
+      } else {
+        this.currentShape.points.push(pos);
+        this.redraw();
+      }
     }
   }
   
@@ -567,9 +633,12 @@ class SpatialAudioBuilder {
     // Create zone with the current shape
     const zoneId = `zone-${this.nextZoneId++}`;
     
-    // Update shape with assigned color
+    // Update shape with assigned color and ensure lineWidth is set
     this.currentShape.color = color;
     this.currentShape.fillColor = this.hexToRgba(color, 0.2);
+    if (!this.currentShape.lineWidth) {
+      this.currentShape.lineWidth = this.lineThickness;
+    }
     
     const zone = {
       id: zoneId,
@@ -638,6 +707,14 @@ class SpatialAudioBuilder {
       zone.color = colorInput.value;
       zone.shape.color = colorInput.value;
       zone.shape.fillColor = this.hexToRgba(colorInput.value, 0.2);
+    }
+    
+    // Update line thickness
+    zone.shape.lineWidth = this.lineThickness;
+    
+    // Update smooth setting if it's a path
+    if (zone.shape.type === 'path') {
+      zone.shape.smooth = this.smoothPath;
     }
     
     // Update zone
@@ -819,6 +896,28 @@ class SpatialAudioBuilder {
       colorInput.value = zone.color || this.getRandomColor();
     }
     
+    // Update line thickness if shape has it
+    if (zone.shape.lineWidth) {
+      this.lineThickness = zone.shape.lineWidth;
+      const lineThicknessInput = document.getElementById('line-thickness');
+      const lineThicknessValue = document.getElementById('line-thickness-value');
+      if (lineThicknessInput) {
+        lineThicknessInput.value = this.lineThickness;
+      }
+      if (lineThicknessValue) {
+        lineThicknessValue.textContent = this.lineThickness + 'px';
+      }
+    }
+    
+    // Update smooth path checkbox if it's a path
+    if (zone.shape.type === 'path') {
+      this.smoothPath = zone.shape.smooth || false;
+      const smoothPathCheckbox = document.getElementById('smooth-path');
+      if (smoothPathCheckbox) {
+        smoothPathCheckbox.checked = this.smoothPath;
+      }
+    }
+    
     // Set audio source type based on whether it has a URL
     if (zone.audio.url) {
       document.getElementById('audio-source-type').value = 'r2';
@@ -878,6 +977,33 @@ class SpatialAudioBuilder {
     document.getElementById('tool-polygon').addEventListener('click', () => {
       this.selectTool('polygon');
     });
+    
+    // Smooth path toggle
+    const smoothPathCheckbox = document.getElementById('smooth-path');
+    if (smoothPathCheckbox) {
+      smoothPathCheckbox.addEventListener('change', (e) => {
+        this.smoothPath = e.target.checked;
+        // Update current shape if it's a path
+        if (this.currentShape && this.currentShape.type === 'path') {
+          this.currentShape.smooth = this.smoothPath;
+        }
+      });
+    }
+    
+    // Line thickness control
+    const lineThicknessInput = document.getElementById('line-thickness');
+    const lineThicknessValue = document.getElementById('line-thickness-value');
+    if (lineThicknessInput && lineThicknessValue) {
+      lineThicknessInput.addEventListener('input', (e) => {
+        this.lineThickness = parseInt(e.target.value);
+        lineThicknessValue.textContent = this.lineThickness + 'px';
+        // Update current shape if drawing
+        if (this.currentShape) {
+          this.currentShape.lineWidth = this.lineThickness;
+          this.redraw();
+        }
+      });
+    }
     
     // Audio source type
     document.getElementById('audio-source-type').addEventListener('change', (e) => {

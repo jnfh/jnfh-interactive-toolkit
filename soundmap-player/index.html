@@ -52,6 +52,19 @@
           <button id="tool-polygon" class="btn-secondary" style="flex: 1; min-width: 80px;">Polygon</button>
         </div>
         
+        <div style="margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="smooth-path" style="width: 18px; height: 18px; cursor: pointer;">
+            <span style="font-size: 13px;">Smooth Curves (Path tool)</span>
+          </label>
+        </div>
+        
+        <div style="display: flex; align-items: center; margin-bottom: 16px;">
+          <label style="flex: 1; margin: 0;">Line Thickness</label>
+          <input type="range" id="line-thickness" min="1" max="20" value="2" style="flex: 2;">
+          <span id="line-thickness-value" style="width: 40px; text-align: right;">2px</span>
+        </div>
+        
         <h3 id="audio-form-title">Assign Audio to Shape</h3>
         <input type="text" id="source-name" placeholder="Shape name">
         
