@@ -209,7 +209,6 @@ class SpatialAudioBuilder {
         break;
     }
   }
-  }
   
   drawGrid() {
     const ctx = this.ctx;
