@@ -32,6 +32,9 @@ class SpatialAudioBuilder {
     this.masterVolume = 0.8;
     this.fadeSpeed = 0.3;
     this.smoothness = 0.15;
+    // Initialize fade decay rate based on fade speed
+    this.fadeDecayRate = 0.98 - (this.fadeSpeed - 0.05) * 0.13 / 0.95;
+    this.fadeDecayRate = Math.max(0.85, Math.min(0.98, this.fadeDecayRate));
     
     // Animation
     this.animationFrameId = null;
@@ -84,8 +87,16 @@ class SpatialAudioBuilder {
     this.loadExistingZones();
     this.setupKeyboardShortcuts();
     this.updateImageControls();
+    this.initializeColorPicker();
     
     console.log('Builder ready');
+  }
+  
+  initializeColorPicker() {
+    const colorInput = document.getElementById('zone-color');
+    if (colorInput && !colorInput.value) {
+      colorInput.value = this.getRandomColor();
+    }
   }
   
   updateImageControls() {
@@ -549,9 +560,12 @@ class SpatialAudioBuilder {
     
     const fadeDistance = parseInt(document.getElementById('fade-distance').value) || 100;
     
+    // Get color from color picker or use random
+    const colorInput = document.getElementById('zone-color');
+    const color = colorInput ? colorInput.value : this.getRandomColor();
+    
     // Create zone with the current shape
     const zoneId = `zone-${this.nextZoneId++}`;
-    const color = this.getRandomColor();
     
     // Update shape with assigned color
     this.currentShape.color = color;
@@ -618,6 +632,14 @@ class SpatialAudioBuilder {
     
     const fadeDistance = parseInt(document.getElementById('fade-distance').value) || 100;
     
+    // Get color from color picker
+    const colorInput = document.getElementById('zone-color');
+    if (colorInput) {
+      zone.color = colorInput.value;
+      zone.shape.color = colorInput.value;
+      zone.shape.fillColor = this.hexToRgba(colorInput.value, 0.2);
+    }
+    
     // Update zone
     zone.name = name;
     zone.audio.data = audioData;
@@ -652,6 +674,10 @@ class SpatialAudioBuilder {
     document.getElementById('audio-source-type').value = 'upload';
     document.getElementById('upload-source').style.display = 'block';
     document.getElementById('r2-source').style.display = 'none';
+    const colorInput = document.getElementById('zone-color');
+    if (colorInput) {
+      colorInput.value = this.getRandomColor();
+    }
     this.pendingAudio = null;
   }
   
@@ -703,6 +729,18 @@ class SpatialAudioBuilder {
           <div style="color: #999; font-size: 11px;">Fade: ${zone.audio.fadeDistance}px</div>
         `;
         
+        const colorBtn = document.createElement('input');
+        colorBtn.type = 'color';
+        colorBtn.value = zone.color || '#667eea';
+        colorBtn.style.cssText = 'width: 32px; height: 32px; border: 2px solid #444; border-radius: 4px; cursor: pointer; padding: 0; background: none; flex-shrink: 0; margin-left: 8px;';
+        colorBtn.addEventListener('change', (e) => {
+          zone.color = e.target.value;
+          zone.shape.color = e.target.value;
+          zone.shape.fillColor = this.hexToRgba(e.target.value, 0.2);
+          this.redraw();
+          this.updateZonesList();
+        });
+        
         const deleteBtn = document.createElement('button');
         deleteBtn.innerHTML = '×';
         deleteBtn.style.cssText = 'background: #ff4444; border: none; color: white; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; flex-shrink: 0; margin-left: 8px; transition: background 0.2s;';
@@ -720,6 +758,7 @@ class SpatialAudioBuilder {
         });
         
         item.appendChild(content);
+        item.appendChild(colorBtn);
         item.appendChild(deleteBtn);
         
         item.addEventListener('dblclick', () => {
@@ -775,6 +814,10 @@ class SpatialAudioBuilder {
     // Populate form with zone data
     document.getElementById('source-name').value = zone.name;
     document.getElementById('fade-distance').value = zone.audio.fadeDistance || 100;
+    const colorInput = document.getElementById('zone-color');
+    if (colorInput) {
+      colorInput.value = zone.color || this.getRandomColor();
+    }
     
     // Set audio source type based on whether it has a URL
     if (zone.audio.url) {
@@ -870,7 +913,10 @@ class SpatialAudioBuilder {
     document.getElementById('fade-speed').addEventListener('input', (e) => {
       this.fadeSpeed = parseFloat(e.target.value);
       document.getElementById('fade-speed-value').textContent = e.target.value + 's';
-      this.smoothness = Math.max(0.05, Math.min(0.3, this.fadeSpeed * 0.3));
+      // Adjust decay rate based on fade speed (faster fade = lower decay rate)
+      // Map fade speed (0.05-1) to decay rate (0.85-0.98)
+      this.fadeDecayRate = 0.98 - (this.fadeSpeed - 0.05) * 0.13 / 0.95;
+      this.fadeDecayRate = Math.max(0.85, Math.min(0.98, this.fadeDecayRate));
     });
     
     // Export
@@ -1389,7 +1435,9 @@ class SpatialAudioBuilder {
         
         if (dist < fadeDistance) {
           const normalized = dist / fadeDistance;
-          const falloff = Math.pow(1 - normalized, 2);
+          // Use exponential falloff for smoother decay curve
+          // Creates a more natural fade that feels smoother
+          const falloff = Math.pow(1 - normalized, 2.5);
           targetVolume = falloff * zone.audio.volume * this.masterVolume;
         }
       }
@@ -1416,27 +1464,41 @@ class SpatialAudioBuilder {
       }
       
       const currentTime = this.audioContext.currentTime;
+      const deltaTime = 1 / 60; // Approximate frame time (60fps)
       
       this.audioZones.forEach((zone, id) => {
         if (!zone.gainNode) return;
         
         const targetVolume = this.targetVolumes.get(id) || 0;
-        const currentGain = zone.currentGain || 0;
+        let currentGain = zone.currentGain || 0;
         
-        if (Math.abs(currentGain - targetVolume) < 0.001) {
+        // Use exponential decay for smoother fades
+        // This creates a natural decay curve instead of linear interpolation
+        if (Math.abs(currentGain - targetVolume) < 0.0001) {
           zone.currentGain = targetVolume;
           zone.gainNode.gain.setValueAtTime(targetVolume, currentTime);
           return;
         }
         
-        const diff = targetVolume - currentGain;
-        let newGain = currentGain + (diff * this.smoothness);
-        
-        if ((targetVolume > currentGain && newGain > targetVolume) || 
-            (targetVolume < currentGain && newGain < targetVolume)) {
-          newGain = targetVolume;
+        // Exponential approach: newValue = target + (current - target) * decayRate
+        // This creates smooth acceleration/deceleration
+        let newGain;
+        if (targetVolume > currentGain) {
+          // Fading in: exponential approach from below
+          newGain = targetVolume - (targetVolume - currentGain) * this.fadeDecayRate;
+          // Ensure we don't overshoot
+          if (newGain > targetVolume) newGain = targetVolume;
+        } else {
+          // Fading out: exponential decay
+          newGain = targetVolume + (currentGain - targetVolume) * this.fadeDecayRate;
+          // Ensure we don't overshoot
+          if (newGain < targetVolume) newGain = targetVolume;
         }
         
+        // Clamp to valid range
+        newGain = Math.max(0, Math.min(1, newGain));
+        
+        // If very close to zero, set to zero to avoid unnecessary processing
         if (targetVolume === 0 && newGain < 0.001) {
           newGain = 0;
         }
