@@ -46,6 +46,8 @@ class SpatialAudioBuilder {
     this.mode = 'edit';
     this.pendingAudio = null;
     this.editingZoneId = null;
+    this.r2DirectoryFiles = []; // List of files from R2 directory
+    this.r2DirectoryUrl = null; // Base URL of R2 directory
     
     // Background image
     this.backgroundImage = null;
@@ -553,12 +555,185 @@ class SpatialAudioBuilder {
     this.redraw();
   }
   
-  async loadR2File() {
+  async loadR2Directory() {
     const r2Url = document.getElementById('r2-url').value.trim();
     
     if (!r2Url) {
-      alert('Please enter an R2 URL');
+      alert('Please enter an R2 directory URL');
       return;
+    }
+    
+    // Normalize URL - ensure it ends with /
+    let directoryUrl = r2Url.endsWith('/') ? r2Url : r2Url + '/';
+    this.r2DirectoryUrl = directoryUrl;
+    
+    try {
+      // Try multiple methods to list files
+      let files = [];
+      
+      // Method 1: Try to fetch manifest.json
+      try {
+        const manifestUrl = directoryUrl + 'manifest.json';
+        const manifestResponse = await fetch(manifestUrl);
+        if (manifestResponse.ok) {
+          const manifest = await manifestResponse.json();
+          if (Array.isArray(manifest.files)) {
+            files = manifest.files.map(file => ({
+              name: file.name || file,
+              url: file.url || (directoryUrl + (file.name || file))
+            }));
+          } else if (Array.isArray(manifest)) {
+            files = manifest.map(file => ({
+              name: typeof file === 'string' ? file : (file.name || file.url),
+              url: typeof file === 'string' ? (directoryUrl + file) : (file.url || directoryUrl + file.name)
+            }));
+          }
+        }
+      } catch (e) {
+        console.log('Manifest.json not found, trying other methods...');
+      }
+      
+      // Method 2: Try Cloudflare Workers API endpoint (if configured)
+      if (files.length === 0) {
+        try {
+          // Try common Workers endpoint patterns
+          const workersUrl = directoryUrl.replace(/\/$/, '') + '/list';
+          const workersResponse = await fetch(workersUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          if (workersResponse.ok) {
+            const data = await workersResponse.json();
+            if (Array.isArray(data)) {
+              files = data.map(file => ({
+                name: typeof file === 'string' ? file : (file.name || file.key),
+                url: typeof file === 'string' ? (directoryUrl + file) : (file.url || directoryUrl + (file.name || file.key))
+              }));
+            } else if (data.files && Array.isArray(data.files)) {
+              files = data.files.map(file => ({
+                name: typeof file === 'string' ? file : (file.name || file.key),
+                url: typeof file === 'string' ? (directoryUrl + file) : (file.url || directoryUrl + (file.name || file.key))
+              }));
+            }
+          }
+        } catch (e) {
+          console.log('Workers API not available');
+        }
+      }
+      
+      // Method 3: Try to parse HTML directory listing (if R2 supports it)
+      if (files.length === 0) {
+        try {
+          const htmlResponse = await fetch(directoryUrl);
+          if (htmlResponse.ok) {
+            const html = await htmlResponse.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const links = doc.querySelectorAll('a[href]');
+            
+            links.forEach(link => {
+              const href = link.getAttribute('href');
+              if (href && !href.startsWith('../') && !href.startsWith('/') && href !== '../') {
+                // Check if it's an audio file
+                const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
+                const isAudio = audioExtensions.some(ext => href.toLowerCase().endsWith(ext));
+                if (isAudio) {
+                  files.push({
+                    name: href,
+                    url: directoryUrl + href
+                  });
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.log('HTML directory listing not available');
+        }
+      }
+      
+      if (files.length === 0) {
+        // If all methods fail, provide manual entry option
+        const manualFiles = prompt(
+          'Could not automatically list files. Please enter file names separated by commas:\n' +
+          '(e.g., file1.mp3, file2.wav, file3.mp3)'
+        );
+        
+        if (manualFiles) {
+          files = manualFiles.split(',').map(file => ({
+            name: file.trim(),
+            url: directoryUrl + file.trim()
+          }));
+        } else {
+          alert('No files found. Please check the directory URL or create a manifest.json file.');
+          return;
+        }
+      }
+      
+      // Filter to only audio files
+      const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
+      files = files.filter(file => {
+        const fileName = file.name.toLowerCase();
+        return audioExtensions.some(ext => fileName.endsWith(ext));
+      });
+      
+      if (files.length === 0) {
+        alert('No audio files found in directory');
+        return;
+      }
+      
+      // Store files and populate dropdown
+      this.r2DirectoryFiles = files;
+      this.populateR2FileDropdown(files);
+      
+      // Show the dropdown
+      document.getElementById('r2-file-list').style.display = 'block';
+      
+      alert(`Found ${files.length} audio file(s) in directory`);
+    } catch (error) {
+      console.error('Error loading R2 directory:', error);
+      alert('Failed to load directory: ' + error.message);
+    }
+  }
+  
+  populateR2FileDropdown(files) {
+    const select = document.getElementById('r2-file-select');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">-- Select a file --</option>';
+    files.forEach((file, index) => {
+      const option = document.createElement('option');
+      option.value = index;
+      option.textContent = file.name;
+      select.appendChild(option);
+    });
+  }
+  
+  async loadR2File() {
+    // Check if we're loading from dropdown or direct URL
+    const fileSelect = document.getElementById('r2-file-select');
+    let r2Url = null;
+    let fileName = null;
+    
+    if (fileSelect && fileSelect.value !== '') {
+      // Loading from dropdown
+      const selectedIndex = parseInt(fileSelect.value);
+      const selectedFile = this.r2DirectoryFiles[selectedIndex];
+      if (!selectedFile) {
+        alert('Please select a file from the dropdown');
+        return;
+      }
+      r2Url = selectedFile.url;
+      fileName = selectedFile.name;
+    } else {
+      // Loading from direct URL input
+      r2Url = document.getElementById('r2-url').value.trim();
+      if (!r2Url) {
+        alert('Please enter an R2 URL or select a file from the dropdown');
+        return;
+      }
+      fileName = r2Url.split('/').pop();
     }
     
     try {
@@ -571,7 +746,7 @@ class SpatialAudioBuilder {
       this.pendingAudio = {
         data: arrayBuffer,
         url: r2Url,
-        fileName: r2Url.split('/').pop()
+        fileName: fileName
       };
       
       alert('File loaded from R2 successfully!');
@@ -1010,12 +1185,36 @@ class SpatialAudioBuilder {
       const type = e.target.value;
       document.getElementById('upload-source').style.display = type === 'upload' ? 'block' : 'none';
       document.getElementById('r2-source').style.display = type === 'r2' ? 'block' : 'none';
+      // Reset R2 file list when switching
+      if (type !== 'r2') {
+        document.getElementById('r2-file-list').style.display = 'none';
+        this.r2DirectoryFiles = [];
+      }
     });
+    
+    // Load R2 directory
+    const loadR2DirectoryBtn = document.getElementById('load-r2-directory');
+    if (loadR2DirectoryBtn) {
+      loadR2DirectoryBtn.addEventListener('click', async () => {
+        await this.loadR2Directory();
+      });
+    }
     
     // Load R2 file
     document.getElementById('load-r2-file').addEventListener('click', async () => {
       await this.loadR2File();
     });
+    
+    // When file is selected from dropdown, auto-load it
+    const r2FileSelect = document.getElementById('r2-file-select');
+    if (r2FileSelect) {
+      r2FileSelect.addEventListener('change', async (e) => {
+        if (e.target.value !== '') {
+          // Auto-load the selected file
+          await this.loadR2File();
+        }
+      });
+    }
     
     // Assign audio
     document.getElementById('assign-audio').addEventListener('click', async () => {
