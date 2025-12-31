@@ -23,6 +23,25 @@ body {
   border-right: 1px solid #333;
   padding: 24px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #444 #1a1a1a;
+}
+
+#controls::-webkit-scrollbar {
+  width: 8px;
+}
+
+#controls::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+#controls::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 4px;
+}
+
+#controls::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 #project-title {
@@ -90,6 +109,11 @@ body {
 .btn-secondary.active {
   background: #667eea;
   border-color: #667eea;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 input[type="range"] {
@@ -181,7 +205,8 @@ input[type="range"]::-moz-range-thumb {
 
 input[type="text"],
 input[type="number"],
-input[type="file"] {
+input[type="file"],
+select {
   width: 100%;
   padding: 10px;
   background: #2a2a2a;
@@ -190,19 +215,45 @@ input[type="file"] {
   color: #e0e0e0;
   font-size: 13px;
   margin-bottom: 8px;
+  transition: border-color 0.2s;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus {
+  outline: none;
+  border-color: #667eea;
 }
 
 input[type="file"] {
   padding: 8px;
+  cursor: pointer;
 }
 
-h3 {
+input[type="file"]::-webkit-file-upload-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 8px;
+  font-size: 12px;
+}
+
+h2, h3 {
   font-size: 14px;
   font-weight: 600;
   color: #fff;
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+h2 {
+  font-size: 20px;
+  text-transform: none;
+  margin-bottom: 24px;
 }
 
 /* Responsive */

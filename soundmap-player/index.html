@@ -17,6 +17,21 @@
       </div>
       
       <div class="control-group">
+        <h3>Background Image</h3>
+        <input type="file" id="background-image" accept="image/*" style="margin-bottom: 8px;">
+        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+          <button id="toggle-image" class="btn-secondary" style="flex: 1;">Show Image</button>
+          <button id="toggle-grid" class="btn-secondary" style="flex: 1;">Hide Grid</button>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+          <label style="flex: 1; margin: 0;">Image Opacity</label>
+          <input type="range" id="image-opacity" min="0" max="1" value="0.5" step="0.05" style="flex: 2;">
+          <span id="image-opacity-value" style="width: 50px; text-align: right;">50%</span>
+        </div>
+        <button id="clear-image" class="btn-secondary" style="width: 100%;">Clear Image</button>
+      </div>
+      
+      <div class="control-group">
         <label>Master Volume</label>
         <input type="range" id="master-volume" min="0" max="100" value="80">
         <span id="volume-value">80%</span>
@@ -81,31 +96,28 @@
       
       <div class="control-group">
         <button id="export-config" class="btn-secondary">Export Config</button>
+        <button id="import-config" class="btn-secondary" style="margin-top: 8px;">Import Config</button>
+        <input type="file" id="import-config-file" accept=".json" style="display: none;">
       </div>
       
       <div class="control-group">
         <h3>Instructions</h3>
-        <p style="font-size: 12px; color: #999; line-height: 1.6;">
-          <strong>Edit Mode:</strong><br>
-          • Select a drawing tool<br>
-          • Draw shapes on canvas<br>
-          • Assign audio (upload or R2)<br>
-          • Set fade distance<br>
-          • Double-click zones to edit<br>
+        <p style="font-size: 11px; color: #999; line-height: 1.6;">
+          <strong>Background Image:</strong><br>
+          • Upload an image to trace shapes<br>
+          • Adjust opacity to see your drawing<br>
+          • Toggle grid/image visibility<br>
           <br>
           <strong>Drawing:</strong><br>
+          • Select tool → Draw → Assign audio<br>
           • Rectangle/Circle: Click & drag<br>
           • Path: Click & drag (freehand)<br>
           • Polygon: Click points, double-click to finish<br>
+          • Double-click zone to edit, × to delete<br>
           <br>
-          <strong>Preview Mode:</strong><br>
+          <strong>Preview:</strong><br>
           • Move mouse to hear spatial audio<br>
-          • Audio plays when cursor is inside shapes<br>
-          • Smooth fading based on distance<br>
-          <br>
-          <strong>Export:</strong><br>
-          • Saves config as JSON<br>
-          • Config references R2 URLs
+          • Audio fades based on distance<br>
         </p>
       </div>
     </div>

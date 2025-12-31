@@ -41,6 +41,12 @@ class SpatialAudioBuilder {
     this.mode = 'edit';
     this.pendingAudio = null;
     this.editingZoneId = null;
+    
+    // Background image
+    this.backgroundImage = null;
+    this.imageOpacity = 0.5;
+    this.showGrid = true;
+    this.showImage = true;
   }
   
   async init() {
@@ -50,11 +56,99 @@ class SpatialAudioBuilder {
       this.config.audioZones = [];
     }
     
+    // Load background image from config if present
+    if (this.config.backgroundImage) {
+      const img = new Image();
+      img.onload = () => {
+        this.backgroundImage = img;
+        this.redraw();
+      };
+      img.src = this.config.backgroundImage;
+    }
+    
+    // Load settings from config
+    if (this.config.settings) {
+      if (this.config.settings.imageOpacity !== undefined) {
+        this.imageOpacity = this.config.settings.imageOpacity;
+      }
+      if (this.config.settings.showGrid !== undefined) {
+        this.showGrid = this.config.settings.showGrid;
+      }
+      if (this.config.settings.showImage !== undefined) {
+        this.showImage = this.config.settings.showImage;
+      }
+    }
+    
     this.initCanvas();
     this.bindControls();
     this.loadExistingZones();
+    this.setupKeyboardShortcuts();
+    this.updateImageControls();
     
     console.log('Builder ready');
+  }
+  
+  updateImageControls() {
+    // Update image opacity display
+    const imageOpacityInput = document.getElementById('image-opacity');
+    const imageOpacityValue = document.getElementById('image-opacity-value');
+    if (imageOpacityInput && imageOpacityValue) {
+      imageOpacityInput.value = this.imageOpacity;
+      imageOpacityValue.textContent = Math.round(this.imageOpacity * 100) + '%';
+    }
+    
+    // Update toggle buttons
+    const toggleGridBtn = document.getElementById('toggle-grid');
+    if (toggleGridBtn) {
+      toggleGridBtn.textContent = this.showGrid ? 'Hide Grid' : 'Show Grid';
+      toggleGridBtn.classList.toggle('active', !this.showGrid);
+    }
+    
+    const toggleImageBtn = document.getElementById('toggle-image');
+    if (toggleImageBtn) {
+      toggleImageBtn.textContent = this.showImage ? 'Hide Image' : 'Show Image';
+      toggleImageBtn.classList.toggle('active', !this.showImage);
+    }
+  }
+  
+  setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Don't trigger shortcuts when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      // Escape to cancel edit or clear current shape
+      if (e.key === 'Escape') {
+        if (this.editingZoneId) {
+          this.cancelEdit();
+        } else if (this.currentShape) {
+          this.currentShape = null;
+          this.redraw();
+        }
+      }
+      
+      // Delete key to delete selected zone
+      if (e.key === 'Delete' && this.editingZoneId) {
+        if (confirm(`Delete zone "${this.config.audioZones.find(z => z.id === this.editingZoneId)?.name}"?`)) {
+          this.deleteZone(this.editingZoneId);
+        }
+      }
+      
+      // Tool shortcuts
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case 'e':
+            e.preventDefault();
+            document.getElementById('export-config')?.click();
+            break;
+          case 'i':
+            e.preventDefault();
+            document.getElementById('import-config')?.click();
+            break;
+        }
+      }
+    });
   }
   
   initCanvas() {
@@ -74,64 +168,119 @@ class SpatialAudioBuilder {
     this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
     
     window.addEventListener('resize', () => {
+      const oldWidth = this.canvas.width;
+      const oldHeight = this.canvas.height;
       this.canvas.width = container.clientWidth;
       this.canvas.height = container.clientHeight;
+      
+      // Scale shapes proportionally if canvas size changed significantly
+      const scaleX = this.canvas.width / oldWidth;
+      const scaleY = this.canvas.height / oldHeight;
+      
+      // Only scale if change is significant (not just small adjustments)
+      if (Math.abs(scaleX - 1) > 0.1 || Math.abs(scaleY - 1) > 0.1) {
+        this.config.audioZones.forEach(zone => {
+          this.scaleShape(zone.shape, scaleX, scaleY);
+        });
+        if (this.currentShape) {
+          this.scaleShape(this.currentShape, scaleX, scaleY);
+        }
+      }
+      
       this.redraw();
     });
+  }
+  
+  scaleShape(shape, scaleX, scaleY) {
+    switch (shape.type) {
+      case 'rectangle':
+      case 'circle':
+        shape.start.x *= scaleX;
+        shape.start.y *= scaleY;
+        shape.end.x *= scaleX;
+        shape.end.y *= scaleY;
+        break;
+      case 'path':
+      case 'polygon':
+        shape.points.forEach(point => {
+          point.x *= scaleX;
+          point.y *= scaleY;
+        });
+        break;
+    }
+  }
   }
   
   drawGrid() {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     
-    ctx.strokeStyle = '#222';
-    ctx.lineWidth = 1;
-    
-    // Vertical lines
-    for (let x = 0; x <= this.canvas.width; x += this.gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, this.canvas.height);
-      ctx.stroke();
+    // Draw background image if available
+    if (this.backgroundImage && this.showImage) {
+      ctx.save();
+      ctx.globalAlpha = this.imageOpacity;
+      ctx.drawImage(this.backgroundImage, 0, 0, this.canvas.width, this.canvas.height);
+      ctx.restore();
     }
     
-    // Horizontal lines
-    for (let y = 0; y <= this.canvas.height; y += this.gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(this.canvas.width, y);
-      ctx.stroke();
-    }
-    
-    // Coordinate labels
-    ctx.fillStyle = '#444';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    
-    for (let x = 0; x <= this.canvas.width; x += 100) {
-      ctx.fillText(x.toString(), x + 2, 2);
-    }
-    for (let y = 0; y <= this.canvas.height; y += 100) {
-      ctx.fillText(y.toString(), 2, y + 2);
+    // Draw grid if enabled
+    if (this.showGrid) {
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 1;
+      
+      // Vertical lines
+      for (let x = 0; x <= this.canvas.width; x += this.gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, this.canvas.height);
+        ctx.stroke();
+      }
+      
+      // Horizontal lines
+      for (let y = 0; y <= this.canvas.height; y += this.gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(this.canvas.width, y);
+        ctx.stroke();
+      }
+      
+      // Coordinate labels
+      ctx.fillStyle = '#444';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      
+      for (let x = 0; x <= this.canvas.width; x += 100) {
+        ctx.fillText(x.toString(), x + 2, 2);
+      }
+      for (let y = 0; y <= this.canvas.height; y += 100) {
+        ctx.fillText(y.toString(), 2, y + 2);
+      }
     }
   }
   
   redraw() {
     this.drawGrid();
-    this.config.audioZones.forEach(zone => this.drawShape(zone.shape));
+    this.config.audioZones.forEach(zone => {
+      this.drawShape(zone.shape, zone.color, zone.name);
+    });
     if (this.currentShape) {
       this.drawShape(this.currentShape);
     }
   }
   
-  drawShape(shape) {
+  drawShape(shape, color = null, name = null) {
     const ctx = this.ctx;
     ctx.save();
     
-    ctx.strokeStyle = shape.color || '#667eea';
-    ctx.fillStyle = shape.fillColor || 'rgba(102, 126, 234, 0.2)';
+    const shapeColor = color || shape.color || '#667eea';
+    const fillColor = shape.fillColor || this.hexToRgba(shapeColor, 0.2);
+    
+    ctx.strokeStyle = shapeColor;
+    ctx.fillStyle = fillColor;
     ctx.lineWidth = 2;
+    
+    let centerX = 0, centerY = 0;
     
     switch (shape.type) {
       case 'rectangle':
@@ -139,6 +288,8 @@ class SpatialAudioBuilder {
         const ry = Math.min(shape.start.y, shape.end.y);
         const rw = Math.abs(shape.end.x - shape.start.x);
         const rh = Math.abs(shape.end.y - shape.start.y);
+        centerX = rx + rw / 2;
+        centerY = ry + rh / 2;
         ctx.fillRect(rx, ry, rw, rh);
         ctx.strokeRect(rx, ry, rw, rh);
         break;
@@ -148,8 +299,10 @@ class SpatialAudioBuilder {
           Math.pow(shape.end.x - shape.start.x, 2) + 
           Math.pow(shape.end.y - shape.start.y, 2)
         );
+        centerX = shape.start.x;
+        centerY = shape.start.y;
         ctx.beginPath();
-        ctx.arc(shape.start.x, shape.start.y, radius, 0, Math.PI * 2);
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         break;
@@ -162,6 +315,10 @@ class SpatialAudioBuilder {
             ctx.lineTo(shape.points[i].x, shape.points[i].y);
           }
           ctx.stroke();
+          // Calculate center for path
+          const pathSum = shape.points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+          centerX = pathSum.x / shape.points.length;
+          centerY = pathSum.y / shape.points.length;
         }
         break;
         
@@ -175,8 +332,26 @@ class SpatialAudioBuilder {
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
+          // Calculate center for polygon
+          const polySum = shape.points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+          centerX = polySum.x / shape.points.length;
+          centerY = polySum.y / shape.points.length;
         }
         break;
+    }
+    
+    // Draw zone name label if provided
+    if (name && (shape.type === 'rectangle' || shape.type === 'circle' || shape.type === 'polygon')) {
+      ctx.fillStyle = shapeColor;
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Draw text with outline for visibility
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(name, centerX, centerY);
+      ctx.fillText(name, centerX, centerY);
     }
     
     ctx.restore();
@@ -232,6 +407,18 @@ class SpatialAudioBuilder {
     if (this.mode === 'preview' && this.isPlaying) {
       this.updateListenerPosition(pos.x, pos.y);
       return;
+    }
+    
+    // Check if hovering over a zone in edit mode
+    if (this.mode === 'edit' && !this.isDrawing && !this.currentTool) {
+      const hoveredZone = this.config.audioZones.find(zone => 
+        this.pointInShape(pos.x, pos.y, zone.shape)
+      );
+      if (hoveredZone) {
+        this.canvas.style.cursor = 'pointer';
+      } else {
+        this.canvas.style.cursor = 'default';
+      }
     }
     
     if (!this.isDrawing || !this.currentShape) return;
@@ -504,15 +691,38 @@ class SpatialAudioBuilder {
       
       this.config.audioZones.forEach(zone => {
         const item = document.createElement('div');
-        item.style.cssText = 'padding: 8px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background 0.2s;';
+        item.style.cssText = 'padding: 10px; margin-bottom: 8px; background: #2a2a2a; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center;';
         if (this.editingZoneId === zone.id) {
           item.style.background = '#3a3a3a';
           item.style.border = '2px solid #667eea';
         }
-        item.innerHTML = `
-          <div style="color: ${zone.color}; font-weight: 600;">${zone.name}</div>
-          <div style="color: #999; margin-top: 4px;">Fade: ${zone.audio.fadeDistance}px</div>
+        
+        const content = document.createElement('div');
+        content.style.flex = '1';
+        content.innerHTML = `
+          <div style="color: ${zone.color}; font-weight: 600; margin-bottom: 4px;">${zone.name}</div>
+          <div style="color: #999; font-size: 11px;">Fade: ${zone.audio.fadeDistance}px</div>
         `;
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '×';
+        deleteBtn.style.cssText = 'background: #ff4444; border: none; color: white; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; flex-shrink: 0; margin-left: 8px; transition: background 0.2s;';
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm(`Delete zone "${zone.name}"?`)) {
+            this.deleteZone(zone.id);
+          }
+        });
+        deleteBtn.addEventListener('mouseenter', () => {
+          deleteBtn.style.background = '#ff6666';
+        });
+        deleteBtn.addEventListener('mouseleave', () => {
+          deleteBtn.style.background = '#ff4444';
+        });
+        
+        item.appendChild(content);
+        item.appendChild(deleteBtn);
+        
         item.addEventListener('dblclick', () => {
           this.editZone(zone.id);
         });
@@ -529,6 +739,32 @@ class SpatialAudioBuilder {
         container.appendChild(item);
       });
     }
+  }
+  
+  deleteZone(zoneId) {
+    // Remove from config
+    const index = this.config.audioZones.findIndex(z => z.id === zoneId);
+    if (index !== -1) {
+      this.config.audioZones.splice(index, 1);
+    }
+    
+    // Stop and remove audio if playing
+    if (this.audioZones.has(zoneId)) {
+      const zone = this.audioZones.get(zoneId);
+      if (zone.source) {
+        zone.source.stop();
+      }
+      this.audioZones.delete(zoneId);
+      this.targetVolumes.delete(zoneId);
+    }
+    
+    // Clear edit mode if deleting the zone being edited
+    if (this.editingZoneId === zoneId) {
+      this.cancelEdit();
+    }
+    
+    this.redraw();
+    this.updateZonesList();
   }
   
   editZone(zoneId) {
@@ -642,6 +878,173 @@ class SpatialAudioBuilder {
     document.getElementById('export-config').addEventListener('click', () => {
       this.exportConfig();
     });
+    
+    // Background image upload
+    const imageInput = document.getElementById('background-image');
+    if (imageInput) {
+      imageInput.addEventListener('change', (e) => {
+        this.loadBackgroundImage(e.target.files[0]);
+      });
+    }
+    
+    // Image opacity control
+    const imageOpacityInput = document.getElementById('image-opacity');
+    if (imageOpacityInput) {
+      imageOpacityInput.addEventListener('input', (e) => {
+        this.imageOpacity = parseFloat(e.target.value);
+        document.getElementById('image-opacity-value').textContent = Math.round(this.imageOpacity * 100) + '%';
+        this.redraw();
+      });
+    }
+    
+    // Toggle grid
+    const toggleGridBtn = document.getElementById('toggle-grid');
+    if (toggleGridBtn) {
+      toggleGridBtn.addEventListener('click', () => {
+        this.showGrid = !this.showGrid;
+        toggleGridBtn.textContent = this.showGrid ? 'Hide Grid' : 'Show Grid';
+        toggleGridBtn.classList.toggle('active', !this.showGrid);
+        this.redraw();
+      });
+    }
+    
+    // Toggle image
+    const toggleImageBtn = document.getElementById('toggle-image');
+    if (toggleImageBtn) {
+      toggleImageBtn.addEventListener('click', () => {
+        this.showImage = !this.showImage;
+        toggleImageBtn.textContent = this.showImage ? 'Hide Image' : 'Show Image';
+        toggleImageBtn.classList.toggle('active', !this.showImage);
+        this.redraw();
+      });
+    }
+    
+    // Clear image
+    const clearImageBtn = document.getElementById('clear-image');
+    if (clearImageBtn) {
+      clearImageBtn.addEventListener('click', () => {
+        if (confirm('Remove background image?')) {
+          this.backgroundImage = null;
+          this.showImage = false;
+          if (document.getElementById('background-image')) {
+            document.getElementById('background-image').value = '';
+          }
+          if (toggleImageBtn) {
+            toggleImageBtn.textContent = 'Show Image';
+            toggleImageBtn.classList.remove('active');
+          }
+          this.redraw();
+        }
+      });
+    }
+    
+    // Import config
+    const importBtn = document.getElementById('import-config');
+    const importFileInput = document.getElementById('import-config-file');
+    if (importBtn && importFileInput) {
+      importBtn.addEventListener('click', () => {
+        importFileInput.click();
+      });
+      importFileInput.addEventListener('change', (e) => {
+        this.importConfig(e.target.files[0]);
+      });
+    }
+  }
+  
+  async importConfig(file) {
+    if (!file) return;
+    
+    try {
+      const text = await file.text();
+      const importedConfig = JSON.parse(text);
+      
+      // Load background image if present
+      if (importedConfig.backgroundImage) {
+        const img = new Image();
+        img.onload = () => {
+          this.backgroundImage = img;
+          this.redraw();
+        };
+        img.src = importedConfig.backgroundImage;
+      }
+      
+      // Load settings
+      if (importedConfig.settings) {
+        if (importedConfig.settings.masterVolume !== undefined) {
+          this.masterVolume = importedConfig.settings.masterVolume;
+          document.getElementById('master-volume').value = this.masterVolume * 100;
+          document.getElementById('volume-value').textContent = Math.round(this.masterVolume * 100) + '%';
+        }
+        if (importedConfig.settings.fadeSpeed !== undefined) {
+          this.fadeSpeed = importedConfig.settings.fadeSpeed;
+          document.getElementById('fade-speed').value = this.fadeSpeed;
+          document.getElementById('fade-speed-value').textContent = this.fadeSpeed + 's';
+        }
+        if (importedConfig.settings.imageOpacity !== undefined) {
+          this.imageOpacity = importedConfig.settings.imageOpacity;
+          document.getElementById('image-opacity').value = this.imageOpacity;
+          document.getElementById('image-opacity-value').textContent = Math.round(this.imageOpacity * 100) + '%';
+        }
+        if (importedConfig.settings.showGrid !== undefined) {
+          this.showGrid = importedConfig.settings.showGrid;
+          const toggleGridBtn = document.getElementById('toggle-grid');
+          if (toggleGridBtn) {
+            toggleGridBtn.textContent = this.showGrid ? 'Hide Grid' : 'Show Grid';
+            toggleGridBtn.classList.toggle('active', !this.showGrid);
+          }
+        }
+        if (importedConfig.settings.showImage !== undefined) {
+          this.showImage = importedConfig.settings.showImage;
+          const toggleImageBtn = document.getElementById('toggle-image');
+          if (toggleImageBtn) {
+            toggleImageBtn.textContent = this.showImage ? 'Hide Image' : 'Show Image';
+            toggleImageBtn.classList.toggle('active', !this.showImage);
+          }
+        }
+      }
+      
+      // Load audio zones (without audio data, just structure)
+      if (importedConfig.audioZones) {
+        this.config.audioZones = importedConfig.audioZones.map(zone => ({
+          ...zone,
+          audio: {
+            ...zone.audio,
+            data: null // Audio data needs to be loaded separately
+          }
+        }));
+        this.nextZoneId = Math.max(...this.config.audioZones.map(z => parseInt(z.id.replace('zone-', '')) || 0), 0) + 1;
+        this.updateZonesList();
+        this.redraw();
+      }
+      
+      alert('Config imported successfully! Note: Audio files need to be re-assigned.');
+    } catch (error) {
+      console.error('Error importing config:', error);
+      alert('Failed to import config: ' + error.message);
+    }
+  }
+  
+  loadBackgroundImage(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Please select a valid image file');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        this.backgroundImage = img;
+        this.showImage = true;
+        if (document.getElementById('toggle-image')) {
+          document.getElementById('toggle-image').textContent = 'Hide Image';
+          document.getElementById('toggle-image').classList.remove('active');
+        }
+        this.redraw();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
   }
   
   selectTool(tool) {
@@ -1076,12 +1479,27 @@ class SpatialAudioBuilder {
   }
   
   exportConfig() {
+    // Convert background image to data URL if present
+    let backgroundImageData = null;
+    if (this.backgroundImage) {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = this.backgroundImage.width;
+      tempCanvas.height = this.backgroundImage.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(this.backgroundImage, 0, 0);
+      backgroundImageData = tempCanvas.toDataURL('image/png');
+    }
+    
     const exportConfig = {
       ...this.config,
       settings: {
         masterVolume: this.masterVolume,
-        fadeSpeed: this.fadeSpeed
+        fadeSpeed: this.fadeSpeed,
+        imageOpacity: this.imageOpacity,
+        showGrid: this.showGrid,
+        showImage: this.showImage
       },
+      backgroundImage: backgroundImageData,
       audioZones: this.config.audioZones.map(zone => ({
         id: zone.id,
         name: zone.name,
