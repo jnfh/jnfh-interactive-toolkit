@@ -500,6 +500,14 @@
                     window.audioHover.masterGainNode.gain.value = 1.0;
                 }
                 
+                // Start playback after configuration is loaded
+                setTimeout(() => {
+                    if (window.audioHover && !window.audioHover.isPlaying && window.audioHover.sources.length > 0) {
+                        window.audioHover.playAll();
+                        console.log('✓ Playback started after config load');
+                    }
+                }, 500);
+                
                 // Reduce reverb amount to prevent distortion
                 if (window.audioHover.reverbAmount > 0.3) {
                     window.audioHover.reverbAmount = 0.3;
