@@ -917,37 +917,36 @@
                 const configHash = await generateHash(configString);
                 const uniqueId = configHash.substring(0, 12);
                 
-                // Prompt user for config URL (where they'll host the config file)
-                const configUrl = prompt('Enter the URL where your config.json will be hosted:\n\n(e.g., https://your-cdn.com/configs/my-config.json)\n\nOr leave empty to use a data URL:', '');
+                // Use data URL (base64 encoded config) - this creates a unique, self-contained URL
+                // No need to host files separately - the entire config is in the URL
+                const base64Config = btoa(unescape(encodeURIComponent(configString)));
+                const finalConfigUrl = `data:application/json;base64,${base64Config}`;
                 
-                let finalConfigUrl;
-                if (!configUrl || configUrl.trim() === '') {
-                    // Use data URL (base64 encoded config)
-                    const base64Config = btoa(unescape(encodeURIComponent(configString)));
-                    finalConfigUrl = `data:application/json;base64,${base64Config}`;
-                } else {
-                    finalConfigUrl = configUrl.trim();
-                }
-                
-                // Generate player URL
+                // Generate player URL with unique config
                 const playerBaseUrl = window.location.origin + '/spatial-mixer/interactive-audio-hover/player.html';
                 const embedUrl = `${playerBaseUrl}?config=${encodeURIComponent(finalConfigUrl)}`;
                 
-                // Generate embed code
-                const embedCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allow="autoplay"></iframe>`;
+                // Generate embed codes optimized for Wix Studio
+                const wixEmbedCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allow="autoplay; microphone" style="border: none;"></iframe>`;
+                
+                // Alternative: Responsive embed code
+                const responsiveEmbedCode = `<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;"><iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;" allow="autoplay; microphone"></iframe></div>`;
                 
                 // Show modal with embed code
                 if (embedModal) {
                     embedUrlDisplay.textContent = embedUrl;
                     embedUrlDisplay.href = embedUrl;
-                    embedCodeTextarea.value = embedCode;
+                    
+                    // Show both embed codes with labels
+                    embedCodeTextarea.value = `// Standard Embed Code (for Wix Studio):\n${wixEmbedCode}\n\n// Responsive Embed Code (optional):\n${responsiveEmbedCode}\n\n// Direct URL:\n${embedUrl}`;
+                    
                     embedModal.style.display = 'block';
                     
                     // Copy embed code to clipboard
                     embedCodeTextarea.select();
                     try {
-                        await navigator.clipboard.writeText(embedCode);
-                        statusEl.textContent = '✓ Embed code copied to clipboard';
+                        await navigator.clipboard.writeText(wixEmbedCode);
+                        statusEl.textContent = '✓ Embed code copied to clipboard! Ready for Wix Studio';
                         statusEl.style.color = '#4CAF50';
                         statusEl.style.display = 'block';
                     } catch (err) {
@@ -957,7 +956,7 @@
                     }
                 } else {
                     // Fallback: show in alert
-                    alert(`Embed URL:\n${embedUrl}\n\nEmbed Code:\n${embedCode}`);
+                    alert(`Embed URL:\n${embedUrl}\n\nEmbed Code:\n${wixEmbedCode}`);
                 }
             });
 
@@ -975,15 +974,43 @@
             if (copyEmbedCodeBtn) {
                 copyEmbedCodeBtn.addEventListener('click', async () => {
                     const embedCodeTextarea = document.getElementById('embedCodeTextarea');
-                    embedCodeTextarea.select();
+                    // Extract just the standard embed code (first iframe)
+                    const embedCode = embedCodeTextarea.value.split('\n\n')[0].replace('// Standard Embed Code (for Wix Studio):\n', '');
                     try {
-                        await navigator.clipboard.writeText(embedCodeTextarea.value);
+                        await navigator.clipboard.writeText(embedCode.trim());
                         const statusEl = document.getElementById('exportStatus');
-                        statusEl.textContent = '✓ Embed code copied to clipboard';
+                        statusEl.textContent = '✓ Embed code copied! Ready to paste in Wix Studio';
                         statusEl.style.color = '#4CAF50';
                         statusEl.style.display = 'block';
                     } catch (err) {
-                        alert('Failed to copy. Please copy manually from the text area.');
+                        embedCodeTextarea.select();
+                        try {
+                            await navigator.clipboard.writeText(embedCodeTextarea.value);
+                            const statusEl = document.getElementById('exportStatus');
+                            statusEl.textContent = '✓ All embed codes copied';
+                            statusEl.style.color = '#4CAF50';
+                            statusEl.style.display = 'block';
+                        } catch (err2) {
+                            alert('Failed to copy. Please copy manually from the text area.');
+                        }
+                    }
+                });
+            }
+
+            // Copy URL button
+            const copyUrlBtn = document.getElementById('copyUrlBtn');
+            if (copyUrlBtn) {
+                copyUrlBtn.addEventListener('click', async () => {
+                    const embedUrlDisplay = document.getElementById('embedUrlDisplay');
+                    const url = embedUrlDisplay.href;
+                    try {
+                        await navigator.clipboard.writeText(url);
+                        const statusEl = document.getElementById('exportStatus');
+                        statusEl.textContent = '✓ URL copied to clipboard';
+                        statusEl.style.color = '#4CAF50';
+                        statusEl.style.display = 'block';
+                    } catch (err) {
+                        alert('Failed to copy URL. Please copy manually.');
                     }
                 });
             }
