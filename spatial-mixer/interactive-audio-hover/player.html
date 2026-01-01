@@ -639,47 +639,14 @@
                     // Initialize volume controls after sources are loaded
                     if (window.audioHover && window.audioHover.sources.length > 0) {
                         initializeVolumeControls();
-                        updateTracksList();
-                    }
-                    
-                    // Attempt auto-play immediately (may require user interaction due to browser policies)
-                    if (window.audioHover && window.audioHover.sources.length > 0) {
-                        console.log(`✓ ${window.audioHover.sources.length} sources ready for playback`);
                         
-                        // Try to resume and play immediately
-                        const attemptAutoPlay = async () => {
-                            try {
-                                // Resume audio context if suspended
-                                if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
-                                    try {
-                                        await window.audioHover.audioContext.resume();
-                                        console.log('✓ Audio context resumed');
-                                    } catch (resumeError) {
-                                        console.warn('⚠️ Could not resume audio context (will resume on interaction):', resumeError);
-                                    }
-                                }
-                                
-                            // Start playback if context is running
-                            if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'running') {
-                                if (!window.audioHover.isPlaying) {
-                                    window.audioHover.playAll();
-                                    console.log('✓ Auto-play started');
-                                }
-                            } else {
-                                console.log('⏸️ Audio context suspended - will start on user interaction');
+                        // Start playback
+                        setTimeout(() => {
+                            if (window.audioHover && !window.audioHover.isPlaying) {
+                                window.audioHover.playAll();
+                                console.log('✓ Playback started');
                             }
-                            } catch (error) {
-                                console.warn('⚠️ Auto-play failed:', error);
-                            }
-                        };
-                        
-                        // Try immediately
-                        attemptAutoPlay();
-                        
-                        // Also try after a short delay (sometimes helps)
-                        setTimeout(attemptAutoPlay, 100);
-                    } else {
-                        console.warn('⚠️ No sources loaded - cannot auto-play');
+                        }, 500);
                     }
                     
                     // Resume audio context and start playback on any user interaction (for autoplay policy)
