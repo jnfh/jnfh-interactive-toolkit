@@ -201,10 +201,11 @@ class SpatialAudioBuilder {
     }
     
     const url = fileSelect.value;
-    await this.loadSingleR2File(url);
+    const autoAssign = document.getElementById('auto-assign-checkbox')?.checked || false;
+    await this.loadSingleR2File(url, autoAssign);
   }
   
-  async loadSingleR2File(url) {
+  async loadSingleR2File(url, autoAssign = false) {
     const statusDiv = document.getElementById('r2-loading-status');
     if (statusDiv) {
       statusDiv.style.display = 'block';
@@ -230,6 +231,16 @@ class SpatialAudioBuilder {
       if (statusDiv) {
         statusDiv.textContent = `✓ Loaded: ${fileName}`;
         statusDiv.style.color = '#4ade80';
+      }
+      
+      // Auto-assign if shape is ready and auto-assign is enabled
+      if (autoAssign && this.currentShape) {
+        // Use the file name as the default name if name field is empty
+        const nameInput = document.getElementById('source-name');
+        if (!nameInput.value.trim()) {
+          nameInput.value = fileName.replace(/\.[^/.]+$/, ''); // Remove extension
+        }
+        await this.assignAudioToShape();
       }
     } catch (error) {
       console.error('Error loading R2 file:', error);
@@ -1023,17 +1034,18 @@ class SpatialAudioBuilder {
     
     // Check if multiple URLs (comma-separated)
     const urls = r2UrlInput.split(',').map(url => url.trim()).filter(url => url);
+    const autoAssign = document.getElementById('auto-assign-checkbox')?.checked || false;
     
     if (urls.length > 1) {
       // Bulk load multiple files
-      await this.loadMultipleR2Files(urls);
+      await this.loadMultipleR2Files(urls, autoAssign);
     } else {
       // Single file load
-      await this.loadSingleR2File(urls[0]);
+      await this.loadSingleR2File(urls[0], autoAssign);
     }
   }
   
-  async loadMultipleR2Files(urls) {
+  async loadMultipleR2Files(urls, autoAssign = false) {
     const loadedFiles = [];
     const failedFiles = [];
     
@@ -1052,10 +1064,11 @@ class SpatialAudioBuilder {
         }
         
         const arrayBuffer = await response.arrayBuffer();
+        const fileName = url.split('/').pop().replace(/%23/g, '#');
         loadedFiles.push({
           data: arrayBuffer,
           url: url,
-          fileName: url.split('/').pop()
+          fileName: fileName
         });
         
         // Update progress
@@ -1077,7 +1090,7 @@ class SpatialAudioBuilder {
       
       // If multiple files loaded, show selection dropdown
       if (loadedFiles.length > 1) {
-        this.showR2FileSelector(loadedFiles);
+        this.showR2FileSelector(loadedFiles, autoAssign);
       } else if (loadedFiles.length === 1) {
         this.pendingAudio = loadedFiles[0];
         const statusDiv = document.getElementById('r2-loading-status');
@@ -1085,6 +1098,15 @@ class SpatialAudioBuilder {
           statusDiv.style.display = 'block';
           statusDiv.textContent = `✓ Loaded: ${loadedFiles[0].fileName}`;
           statusDiv.style.color = '#4ade80';
+        }
+        
+        // Auto-assign if enabled and shape is ready
+        if (autoAssign && this.currentShape) {
+          const nameInput = document.getElementById('source-name');
+          if (!nameInput.value.trim()) {
+            nameInput.value = loadedFiles[0].fileName.replace(/\.[^/.]+$/, '');
+          }
+          await this.assignAudioToShape();
         }
       }
     }
@@ -1099,7 +1121,7 @@ class SpatialAudioBuilder {
     }
   }
   
-  showR2FileSelector(files) {
+  showR2FileSelector(files, autoAssign = false) {
     // Create or update file selector dropdown
     let selector = document.getElementById('r2-file-selector');
     if (!selector) {
@@ -1119,7 +1141,7 @@ class SpatialAudioBuilder {
       <button id="select-r2-file" class="btn-secondary" style="width: 100%;">Use Selected File</button>
     `;
     
-    document.getElementById('select-r2-file').addEventListener('click', () => {
+    document.getElementById('select-r2-file').addEventListener('click', async () => {
       const dropdown = document.getElementById('r2-file-select-dropdown');
       const selectedIndex = parseInt(dropdown.value);
       this.pendingAudio = files[selectedIndex];
@@ -1130,7 +1152,48 @@ class SpatialAudioBuilder {
         statusDiv.style.color = '#4ade80';
       }
       selector.remove();
+      
+      // Auto-assign if enabled and shape is ready
+      if (autoAssign && this.currentShape) {
+        const nameInput = document.getElementById('source-name');
+        if (!nameInput.value.trim()) {
+          nameInput.value = files[selectedIndex].fileName.replace(/\.[^/.]+$/, '');
+        }
+        await this.assignAudioToShape();
+      }
     });
+  }
+  
+  async loadAndAssignUploadedFile() {
+    const fileInput = document.getElementById('audio-file');
+    if (!fileInput.files[0]) {
+      alert('Please select an audio file');
+      return;
+    }
+    
+    if (!this.currentShape) {
+      alert('Please draw a shape first');
+      return;
+    }
+    
+    const file = fileInput.files[0];
+    const audioData = await file.arrayBuffer();
+    
+    // Set pending audio
+    this.pendingAudio = {
+      data: audioData,
+      url: null,
+      fileName: file.name
+    };
+    
+    // Set name if empty
+    const nameInput = document.getElementById('source-name');
+    if (!nameInput.value.trim()) {
+      nameInput.value = file.name.replace(/\.[^/.]+$/, '');
+    }
+    
+    // Auto-assign
+    await this.assignAudioToShape();
   }
   
   async assignAudioToShape() {
