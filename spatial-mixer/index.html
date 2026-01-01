@@ -892,7 +892,7 @@
 
             document.getElementById('copyConfigBtn').addEventListener('click', () => {
                 const configJson = window.audioHover.exportConfiguration();
-                navigator.clipboard.writeText(configJson).then(() => {
+                navigator.clipboard.writeText(JSON.stringify(configJson, null, 2)).then(() => {
                     const statusEl = document.getElementById('exportStatus');
                     statusEl.textContent = '✓ Configuration copied to clipboard';
                     statusEl.style.color = '#4CAF50';
@@ -904,6 +904,97 @@
                     statusEl.style.display = 'block';
                 });
             });
+
+            document.getElementById('generateEmbedBtn').addEventListener('click', async () => {
+                const statusEl = document.getElementById('exportStatus');
+                const embedModal = document.getElementById('embedModal');
+                const embedCodeTextarea = document.getElementById('embedCodeTextarea');
+                const embedUrlDisplay = document.getElementById('embedUrlDisplay');
+                
+                // Generate unique ID for this config
+                const configJson = window.audioHover.exportConfiguration();
+                const configString = JSON.stringify(configJson);
+                const configHash = await generateHash(configString);
+                const uniqueId = configHash.substring(0, 12);
+                
+                // Prompt user for config URL (where they'll host the config file)
+                const configUrl = prompt('Enter the URL where your config.json will be hosted:\n\n(e.g., https://your-cdn.com/configs/my-config.json)\n\nOr leave empty to use a data URL:', '');
+                
+                let finalConfigUrl;
+                if (!configUrl || configUrl.trim() === '') {
+                    // Use data URL (base64 encoded config)
+                    const base64Config = btoa(unescape(encodeURIComponent(configString)));
+                    finalConfigUrl = `data:application/json;base64,${base64Config}`;
+                } else {
+                    finalConfigUrl = configUrl.trim();
+                }
+                
+                // Generate player URL
+                const playerBaseUrl = window.location.origin + '/spatial-mixer/interactive-audio-hover/player.html';
+                const embedUrl = `${playerBaseUrl}?config=${encodeURIComponent(finalConfigUrl)}`;
+                
+                // Generate embed code
+                const embedCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allow="autoplay"></iframe>`;
+                
+                // Show modal with embed code
+                if (embedModal) {
+                    embedUrlDisplay.textContent = embedUrl;
+                    embedUrlDisplay.href = embedUrl;
+                    embedCodeTextarea.value = embedCode;
+                    embedModal.style.display = 'block';
+                    
+                    // Copy embed code to clipboard
+                    embedCodeTextarea.select();
+                    try {
+                        await navigator.clipboard.writeText(embedCode);
+                        statusEl.textContent = '✓ Embed code copied to clipboard';
+                        statusEl.style.color = '#4CAF50';
+                        statusEl.style.display = 'block';
+                    } catch (err) {
+                        statusEl.textContent = '⚠ Embed code ready (copy manually)';
+                        statusEl.style.color = '#ff9800';
+                        statusEl.style.display = 'block';
+                    }
+                } else {
+                    // Fallback: show in alert
+                    alert(`Embed URL:\n${embedUrl}\n\nEmbed Code:\n${embedCode}`);
+                }
+            });
+
+            // Simple hash function for generating unique IDs
+            async function generateHash(str) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(str);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+
+            // Copy embed code button
+            const copyEmbedCodeBtn = document.getElementById('copyEmbedCodeBtn');
+            if (copyEmbedCodeBtn) {
+                copyEmbedCodeBtn.addEventListener('click', async () => {
+                    const embedCodeTextarea = document.getElementById('embedCodeTextarea');
+                    embedCodeTextarea.select();
+                    try {
+                        await navigator.clipboard.writeText(embedCodeTextarea.value);
+                        const statusEl = document.getElementById('exportStatus');
+                        statusEl.textContent = '✓ Embed code copied to clipboard';
+                        statusEl.style.color = '#4CAF50';
+                        statusEl.style.display = 'block';
+                    } catch (err) {
+                        alert('Failed to copy. Please copy manually from the text area.');
+                    }
+                });
+            }
+
+            // Close embed modal
+            const closeEmbedModalBtn = document.getElementById('closeEmbedModalBtn');
+            if (closeEmbedModalBtn) {
+                closeEmbedModalBtn.addEventListener('click', () => {
+                    document.getElementById('embedModal').style.display = 'none';
+                });
+            }
 
             // Import buttons
             document.getElementById('configFileInput').addEventListener('change', async (e) => {
