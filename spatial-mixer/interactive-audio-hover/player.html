@@ -554,7 +554,14 @@
                     // Initialize volume controls after sources are loaded
                     if (window.audioHover && window.audioHover.sources.length > 0) {
                         initializeVolumeControls();
-                        updateTracksList();
+                        
+                        // Start playback
+                        setTimeout(() => {
+                            if (window.audioHover && !window.audioHover.isPlaying) {
+                                window.audioHover.playAll();
+                                console.log('✓ Playback started');
+                            }
+                        }, 500);
                     }
                     
                     // Attempt auto-play
