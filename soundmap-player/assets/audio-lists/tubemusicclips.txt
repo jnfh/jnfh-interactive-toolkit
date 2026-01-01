@@ -1,0 +1,11 @@
+# TUBEmusic clips Audio Files
+# Add your R2 URLs here, one per line or comma-separated
+
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/TUBEmusic/clips/bakerloo-clip.mp3
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/TUBEmusic/clips/central-clip.mp3
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/TUBEmusic/clips/district-clip.mp3
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/TUBEmusic/clips/jubillee-clip.mp3
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/TUBEmusic/clips/northern-clip.mp3
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/TUBEmusic/clips/piccadilly-clip.mp3
+
+

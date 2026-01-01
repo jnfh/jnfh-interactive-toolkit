@@ -1,7 +1,8 @@
-# Default Audio Files
+# NOTES Audio Files
 # Add your R2 URLs here, one per line or comma-separated
 
-# Example:
-# https://pub-xxx.r2.dev/audio1.mp3
-# https://pub-xxx.r2.dev/audio2.wav
-
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/Notes/jnfh_G%23.wav
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/Notes/jnfh_C%23.wav
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/Notes/jnfh_D%23.wav
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/Notes/jnfh_F%23.wav
+https://pub-b8cf302764c84d3f955e78aac653f917.r2.dev/Notes/jnfh_G%23.wav
