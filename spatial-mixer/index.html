@@ -620,9 +620,10 @@
                         <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; opacity: 0.8;">Embed Code (for Wix Studio):</label>
                         <textarea id="embedCodeTextarea" rows="8" readonly style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: monospace; font-size: 0.8rem; resize: vertical;"></textarea>
                     </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="copyEmbedCodeBtn" class="btn btn-primary" style="flex: 1;">📋 Copy Embed Code</button>
-                        <button id="copyUrlBtn" class="btn btn-secondary" style="flex: 1;">🔗 Copy URL</button>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button id="copyEmbedCodeBtn" class="btn btn-primary" style="flex: 1; min-width: 120px;">📋 Copy Embed Code</button>
+                        <button id="copyUrlBtn" class="btn btn-secondary" style="flex: 1; min-width: 120px;">🔗 Copy URL</button>
+                        <button id="downloadHtmlBtn" class="btn btn-primary" style="flex: 1; min-width: 120px;">📄 Download HTML</button>
                         <button id="closeEmbedModalBtn" class="btn btn-secondary">Close</button>
                     </div>
                 </div>
@@ -1025,6 +1026,12 @@
                     }
                     
                     embedCodeTextarea.value = embedText;
+                    
+                    // Store HTML content and URL for download button
+                    embedModal.dataset.htmlContent = htmlFileContent;
+                    embedModal.dataset.embedUrl = embedUrl;
+                    embedModal.dataset.uniqueId = uniqueId;
+                    
                     embedModal.style.display = 'block';
                     
                     // If user chose hosted file, trigger download
@@ -1112,6 +1119,37 @@
                     } catch (err) {
                         alert('Failed to copy URL. Please copy manually.');
                     }
+                });
+            }
+
+            // Download HTML button
+            const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
+            if (downloadHtmlBtn) {
+                downloadHtmlBtn.addEventListener('click', () => {
+                    const embedModal = document.getElementById('embedModal');
+                    const htmlContent = embedModal.dataset.htmlContent;
+                    const uniqueId = embedModal.dataset.uniqueId || 'embed';
+                    
+                    if (!htmlContent) {
+                        alert('No HTML content available. Please generate embed code first.');
+                        return;
+                    }
+                    
+                    // Create blob and download
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `audio-player-${uniqueId}.html`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    const statusEl = document.getElementById('exportStatus');
+                    statusEl.textContent = '✓ HTML file downloaded! Open it in a browser or upload to your hosting.';
+                    statusEl.style.color = '#4CAF50';
+                    statusEl.style.display = 'block';
                 });
             }
 
