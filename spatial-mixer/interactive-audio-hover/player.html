@@ -786,7 +786,14 @@
                         // Initialize controls after loading
                         if (window.audioHover && window.audioHover.sources.length > 0) {
                             initializeVolumeControls();
-                            updateTracksList();
+                            
+                            // Start playback
+                            setTimeout(() => {
+                                if (window.audioHover && !window.audioHover.isPlaying) {
+                                    window.audioHover.playAll();
+                                    console.log('✓ Playback started');
+                                }
+                            }, 500);
                         }
                         
                         statusEl.textContent = '✓ Configuration loaded';
