@@ -577,6 +577,27 @@
             const urlParams = new URLSearchParams(window.location.search);
             let configUrl = urlParams.get('config');
             
+            // Decode the config URL if it's URL-encoded (data URLs often get encoded)
+            if (configUrl) {
+                // Try decoding - data URLs may be double-encoded
+                try {
+                    const decoded = decodeURIComponent(configUrl);
+                    // Check if it's a valid data URL after decoding
+                    if (decoded.startsWith('data:application/json')) {
+                        configUrl = decoded;
+                    } else {
+                        // Try one more decode level
+                        const doubleDecoded = decodeURIComponent(decoded);
+                        if (doubleDecoded.startsWith('data:application/json')) {
+                            configUrl = doubleDecoded;
+                        }
+                    }
+                } catch (e) {
+                    // If decoding fails, use original
+                    console.warn('Could not decode config URL, using as-is:', e);
+                }
+            }
+            
             // If no config parameter, try default config.json, but don't fail if it doesn't exist
             if (!configUrl) {
                 const baseUrl = getBaseUrl();
