@@ -924,18 +924,57 @@
                 
                 // Generate unique ID for this config
                 const configJson = window.audioHover.exportConfiguration();
-                const configString = JSON.stringify(configJson);
+                const configString = JSON.stringify(configJson, null, 2);
                 const configHash = await generateHash(configString);
                 const uniqueId = configHash.substring(0, 12);
                 
-                // Use data URL (base64 encoded config) - this creates a unique, self-contained URL
-                // No need to host files separately - the entire config is in the URL
-                const base64Config = btoa(unescape(encodeURIComponent(configString)));
-                const finalConfigUrl = `data:application/json;base64,${base64Config}`;
+                // Offer two options: data URL (quick but long) or hosted file (better for Wix)
+                const useHostedFile = confirm(
+                    'Choose embed method:\n\n' +
+                    'OK = Hosted File (Recommended for Wix)\n' +
+                    '  - Download config file\n' +
+                    '  - Upload to your hosting/CDN\n' +
+                    '  - Shorter, cleaner URLs\n\n' +
+                    'Cancel = Data URL (Quick but long URLs)\n' +
+                    '  - Self-contained URL\n' +
+                    '  - May not work in Wix iframes'
+                );
                 
-                // Generate player URL with unique config
+                let finalConfigUrl;
+                let embedUrl;
+                let downloadBlob = null;
+                
+                if (useHostedFile) {
+                    // Create downloadable config file
+                    const blob = new Blob([configString], { type: 'application/json' });
+                    downloadBlob = blob;
+                    const downloadUrl = URL.createObjectURL(blob);
+                    
+                    // Prompt user for their hosted config URL
+                    const hostedUrl = prompt(
+                        'After uploading your config file, enter the full URL:\n\n' +
+                        'Example: https://your-cdn.com/configs/my-config.json\n' +
+                        'Or: https://jnfh-interactive-toolkit.netlify.app/spatial-mixer/configs/config-' + uniqueId + '.json\n\n' +
+                        'Leave empty to use data URL fallback:',
+                        ''
+                    );
+                    
+                    if (hostedUrl && hostedUrl.trim()) {
+                        finalConfigUrl = hostedUrl.trim();
+                    } else {
+                        // Fallback to data URL
+                        const base64Config = btoa(unescape(encodeURIComponent(configString)));
+                        finalConfigUrl = `data:application/json;base64,${base64Config}`;
+                    }
+                } else {
+                    // Use data URL (base64 encoded config)
+                    const base64Config = btoa(unescape(encodeURIComponent(configString)));
+                    finalConfigUrl = `data:application/json;base64,${base64Config}`;
+                }
+                
+                // Generate player URL with config
                 const playerBaseUrl = window.location.origin + '/spatial-mixer/interactive-audio-hover/player.html';
-                const embedUrl = `${playerBaseUrl}?config=${encodeURIComponent(finalConfigUrl)}`;
+                embedUrl = `${playerBaseUrl}?config=${encodeURIComponent(finalConfigUrl)}`;
                 
                 // Generate embed codes optimized for Wix Studio
                 const wixEmbedCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allow="autoplay; microphone" style="border: none;"></iframe>`;
@@ -948,22 +987,41 @@
                     embedUrlDisplay.textContent = embedUrl;
                     embedUrlDisplay.href = embedUrl;
                     
-                    // Show both embed codes with labels
-                    embedCodeTextarea.value = `// Standard Embed Code (for Wix Studio):\n${wixEmbedCode}\n\n// Responsive Embed Code (optional):\n${responsiveEmbedCode}\n\n// Direct URL:\n${embedUrl}`;
+                    let embedText = `// Standard Embed Code (for Wix Studio):\n${wixEmbedCode}\n\n// Responsive Embed Code (optional):\n${responsiveEmbedCode}\n\n// Direct URL:\n${embedUrl}`;
                     
+                    if (downloadBlob) {
+                        embedText += `\n\n// Config File Name: config-${uniqueId}.json\n// Download the config file and upload it to your hosting/CDN`;
+                    }
+                    
+                    embedCodeTextarea.value = embedText;
                     embedModal.style.display = 'block';
                     
-                    // Copy embed code to clipboard
-                    embedCodeTextarea.select();
-                    try {
-                        await navigator.clipboard.writeText(wixEmbedCode);
-                        statusEl.textContent = '✓ Embed code copied to clipboard! Ready for Wix Studio';
-                        statusEl.style.color = '#4CAF50';
+                    // If user chose hosted file, trigger download
+                    if (downloadBlob) {
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.download = `config-${uniqueId}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(downloadUrl);
+                        
+                        statusEl.textContent = '✓ Config file downloaded! Upload it and use the hosted URL for shorter embed codes.';
+                        statusEl.style.color = '#2196F3';
                         statusEl.style.display = 'block';
-                    } catch (err) {
-                        statusEl.textContent = '⚠ Embed code ready (copy manually)';
-                        statusEl.style.color = '#ff9800';
-                        statusEl.style.display = 'block';
+                    } else {
+                        // Copy embed code to clipboard
+                        embedCodeTextarea.select();
+                        try {
+                            await navigator.clipboard.writeText(wixEmbedCode);
+                            statusEl.textContent = '✓ Embed code copied! Note: Data URLs may be too long for Wix - consider using hosted files.';
+                            statusEl.style.color = '#ff9800';
+                            statusEl.style.display = 'block';
+                        } catch (err) {
+                            statusEl.textContent = '⚠ Embed code ready (copy manually)';
+                            statusEl.style.color = '#ff9800';
+                            statusEl.style.display = 'block';
+                        }
                     }
                 } else {
                     // Fallback: show in alert

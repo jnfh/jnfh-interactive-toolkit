@@ -416,6 +416,35 @@
             try {
                 console.log('🔍 Loading config from:', url);
                 
+                // Handle data URLs (base64 encoded configs)
+                if (url.startsWith('data:application/json')) {
+                    console.log('📦 Detected data URL, decoding...');
+                    try {
+                        // Extract base64 part
+                        const base64Match = url.match(/base64,(.+)/);
+                        if (base64Match) {
+                            const base64Data = base64Match[1];
+                            const jsonString = decodeURIComponent(escape(atob(base64Data)));
+                            const config = JSON.parse(jsonString);
+                            console.log('✓ Data URL config decoded successfully');
+                            
+                            // Check if it's a simple array format
+                            if (Array.isArray(config) && config.length > 0 && config[0].url) {
+                                console.log('🔄 Detected simple array format, converting...');
+                                return convertSimpleArrayToConfig(config);
+                            }
+                            
+                            return config;
+                        } else {
+                            throw new Error('Invalid data URL format');
+                        }
+                    } catch (dataError) {
+                        console.error('❌ Error decoding data URL:', dataError);
+                        throw new Error('Failed to decode data URL: ' + dataError.message);
+                    }
+                }
+                
+                // Handle regular HTTP/HTTPS URLs
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
