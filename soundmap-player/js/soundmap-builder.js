@@ -109,8 +109,8 @@ class SpatialAudioBuilder {
     // Look for .txt files in the assets/audio-lists directory
     // These files should contain one URL per line or comma-separated URLs
     const listFiles = [
-      'assets/audio-lists/default.txt',
       'assets/audio-lists/notes.txt',
+      'assets/audio-lists/tubemusicclips.txt',
       'assets/audio-lists/custom.txt'
     ];
     
@@ -151,17 +151,20 @@ class SpatialAudioBuilder {
     });
   }
   
-  async loadR2FileList() {
+  onFileListSelected() {
     const select = document.getElementById('r2-file-list-select');
+    const fileListContainer = document.getElementById('r2-file-list-files');
+    const fileSelect = document.getElementById('r2-file-from-list');
+    
     if (!select || select.value === '') {
-      alert('Please select a file list');
+      fileListContainer.style.display = 'none';
       return;
     }
     
     const listIndex = parseInt(select.value);
     const fileList = this.audioFileLists[listIndex];
     if (!fileList) {
-      alert('File list not found');
+      fileListContainer.style.display = 'none';
       return;
     }
     
@@ -169,15 +172,73 @@ class SpatialAudioBuilder {
     const urls = fileList.content
       .split(/[,\n]/)
       .map(url => url.trim())
-      .filter(url => url && url.startsWith('http'));
+      .filter(url => url && url.startsWith('http') && !url.startsWith('#'));
     
     if (urls.length === 0) {
+      fileListContainer.style.display = 'none';
       alert('No valid URLs found in file list');
       return;
     }
     
-    // Load all files from the list
-    await this.loadMultipleR2Files(urls);
+    // Populate file dropdown
+    fileSelect.innerHTML = '<option value="">-- Select a file --</option>';
+    urls.forEach((url, index) => {
+      const fileName = url.split('/').pop().replace(/%23/g, '#');
+      const option = document.createElement('option');
+      option.value = url;
+      option.textContent = fileName;
+      fileSelect.appendChild(option);
+    });
+    
+    fileListContainer.style.display = 'block';
+  }
+  
+  async loadSelectedFileFromList() {
+    const fileSelect = document.getElementById('r2-file-from-list');
+    if (!fileSelect || !fileSelect.value) {
+      alert('Please select a file from the list');
+      return;
+    }
+    
+    const url = fileSelect.value;
+    await this.loadSingleR2File(url);
+  }
+  
+  async loadSingleR2File(url) {
+    const statusDiv = document.getElementById('r2-loading-status');
+    if (statusDiv) {
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = 'Loading...';
+      statusDiv.style.color = '#999';
+    }
+    
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const fileName = url.split('/').pop().replace(/%23/g, '#');
+      
+      this.pendingAudio = {
+        data: arrayBuffer,
+        url: url,
+        fileName: fileName
+      };
+      
+      if (statusDiv) {
+        statusDiv.textContent = `✓ Loaded: ${fileName}`;
+        statusDiv.style.color = '#4ade80';
+      }
+    } catch (error) {
+      console.error('Error loading R2 file:', error);
+      if (statusDiv) {
+        statusDiv.textContent = `✗ Failed: ${error.message}`;
+        statusDiv.style.color = '#ff4444';
+      }
+      alert('Failed to load file: ' + error.message);
+    }
   }
   
   initializeColorPicker() {
@@ -953,6 +1014,7 @@ class SpatialAudioBuilder {
   
   async loadR2File() {
     const r2UrlInput = document.getElementById('r2-url').value.trim();
+    const statusDiv = document.getElementById('r2-loading-status');
     
     if (!r2UrlInput) {
       alert('Please enter an R2 URL or comma-separated URLs');
@@ -967,25 +1029,7 @@ class SpatialAudioBuilder {
       await this.loadMultipleR2Files(urls);
     } else {
       // Single file load
-      const r2Url = urls[0];
-      try {
-        const response = await fetch(r2Url);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const arrayBuffer = await response.arrayBuffer();
-        this.pendingAudio = {
-          data: arrayBuffer,
-          url: r2Url,
-          fileName: r2Url.split('/').pop()
-        };
-        
-        alert('File loaded from R2 successfully!');
-      } catch (error) {
-        console.error('Error loading R2 file:', error);
-        alert('Failed to load file from R2: ' + error.message);
-      }
+      await this.loadSingleR2File(urls[0]);
     }
   }
   
@@ -1034,13 +1078,24 @@ class SpatialAudioBuilder {
       // If multiple files loaded, show selection dropdown
       if (loadedFiles.length > 1) {
         this.showR2FileSelector(loadedFiles);
-      } else {
-        alert(`File loaded from R2 successfully!`);
+      } else if (loadedFiles.length === 1) {
+        this.pendingAudio = loadedFiles[0];
+        const statusDiv = document.getElementById('r2-loading-status');
+        if (statusDiv) {
+          statusDiv.style.display = 'block';
+          statusDiv.textContent = `✓ Loaded: ${loadedFiles[0].fileName}`;
+          statusDiv.style.color = '#4ade80';
+        }
       }
     }
     
     if (failedFiles.length > 0) {
-      alert(`Loaded ${loadedFiles.length} file(s), ${failedFiles.length} failed:\n${failedFiles.map(f => f.url).join('\n')}`);
+      const statusDiv = document.getElementById('r2-loading-status');
+      if (statusDiv) {
+        statusDiv.style.display = 'block';
+        statusDiv.textContent = `⚠ Loaded ${loadedFiles.length}, ${failedFiles.length} failed`;
+        statusDiv.style.color = '#ffa500';
+      }
     }
   }
   
@@ -1068,8 +1123,13 @@ class SpatialAudioBuilder {
       const dropdown = document.getElementById('r2-file-select-dropdown');
       const selectedIndex = parseInt(dropdown.value);
       this.pendingAudio = files[selectedIndex];
+      const statusDiv = document.getElementById('r2-loading-status');
+      if (statusDiv) {
+        statusDiv.style.display = 'block';
+        statusDiv.textContent = `✓ Selected: ${files[selectedIndex].fileName}`;
+        statusDiv.style.color = '#4ade80';
+      }
       selector.remove();
-      alert(`Selected: ${files[selectedIndex].fileName}`);
     });
   }
   
@@ -1525,20 +1585,36 @@ class SpatialAudioBuilder {
       const type = e.target.value;
       document.getElementById('upload-source').style.display = type === 'upload' ? 'block' : 'none';
       document.getElementById('r2-source').style.display = type === 'r2' ? 'block' : 'none';
+      
+      // Reset R2 file list selection when switching
+      if (type !== 'r2') {
+        document.getElementById('r2-file-list-files').style.display = 'none';
+        document.getElementById('r2-loading-status').style.display = 'none';
+        const fileListSelect = document.getElementById('r2-file-list-select');
+        if (fileListSelect) fileListSelect.value = '';
+      }
     });
     
-    // Load R2 file
+    // File list selection
+    const fileListSelect = document.getElementById('r2-file-list-select');
+    if (fileListSelect) {
+      fileListSelect.addEventListener('change', () => {
+        this.onFileListSelected();
+      });
+    }
+    
+    // Load selected file from list
+    const loadSelectedFileBtn = document.getElementById('load-selected-file');
+    if (loadSelectedFileBtn) {
+      loadSelectedFileBtn.addEventListener('click', async () => {
+        await this.loadSelectedFileFromList();
+      });
+    }
+    
+    // Load R2 file (manual URLs)
     document.getElementById('load-r2-file').addEventListener('click', async () => {
       await this.loadR2File();
     });
-    
-    // Load R2 file list
-    const loadR2FileListBtn = document.getElementById('load-r2-file-list');
-    if (loadR2FileListBtn) {
-      loadR2FileListBtn.addEventListener('click', async () => {
-        await this.loadR2FileList();
-      });
-    }
     
     // Assign audio
     document.getElementById('assign-audio').addEventListener('click', async () => {
