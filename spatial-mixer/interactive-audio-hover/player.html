@@ -530,102 +530,172 @@
                 const baseUrl = getBaseUrl();
                 configUrl = baseUrl + 'config.json';
                 console.log('🎯 No config parameter, trying default:', configUrl);
-            } else if (!configUrl.startsWith('http://') && !configUrl.startsWith('https://') && !configUrl.startsWith('data:')) {
-                // Relative path - construct full URL
-                const baseUrl = getBaseUrl();
-                configUrl = baseUrl + configUrl;
-            }
-            
-            console.log('🎯 Loading config from:', configUrl);
-            
-            try {
-                // Load config
-                const config = await loadConfigFromUrl(configUrl);
                 
-                // Load configuration into player
-                await loadConfiguration(config);
-                
-                // Initialize volume controls after sources are loaded
-                if (window.audioHover && window.audioHover.sources.length > 0) {
-                    initializeVolumeControls();
-                    updateTracksList();
-                }
-                
-                // Attempt auto-play immediately (may require user interaction due to browser policies)
-                if (window.audioHover && window.audioHover.sources.length > 0) {
-                    console.log(`✓ ${window.audioHover.sources.length} sources ready for playback`);
+                // Try to load default config, but handle 404 gracefully
+                try {
+                    const config = await loadConfigFromUrl(configUrl);
+                    await loadConfiguration(config);
                     
-                    // Try to resume and play immediately
-                    const attemptAutoPlay = async () => {
-                        try {
-                            // Resume audio context if suspended
-                            if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
-                                try {
-                                    await window.audioHover.audioContext.resume();
-                                    console.log('✓ Audio context resumed');
-                                } catch (resumeError) {
-                                    console.warn('⚠️ Could not resume audio context (will resume on interaction):', resumeError);
+                    // Initialize volume controls after sources are loaded
+                    if (window.audioHover && window.audioHover.sources.length > 0) {
+                        initializeVolumeControls();
+                        updateTracksList();
+                    }
+                    
+                    // Attempt auto-play
+                    if (window.audioHover && window.audioHover.sources.length > 0) {
+                        console.log(`✓ ${window.audioHover.sources.length} sources ready for playback`);
+                        const attemptAutoPlay = async () => {
+                            try {
+                                if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                                    try {
+                                        await window.audioHover.audioContext.resume();
+                                        console.log('✓ Audio context resumed');
+                                    } catch (resumeError) {
+                                        console.warn('⚠️ Could not resume audio context (will resume on interaction):', resumeError);
+                                    }
                                 }
+                                
+                                if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'running') {
+                                    window.audioHover.playAll();
+                                    console.log('✓ Auto-play started');
+                                } else {
+                                    console.log('⏸️ Audio context suspended - will start on user interaction');
+                                }
+                            } catch (error) {
+                                console.warn('⚠️ Auto-play failed:', error);
                             }
-                            
-                            // Start playback if context is running
-                            if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'running') {
-                                window.audioHover.playAll();
-                                console.log('✓ Auto-play started');
-                            } else {
-                                console.log('⏸️ Audio context suspended - will start on user interaction');
+                        };
+                        
+                        attemptAutoPlay();
+                        setTimeout(attemptAutoPlay, 100);
+                    }
+                    
+                    // Resume audio context on user interaction
+                    const resumeOnInteraction = async () => {
+                        if (window.audioHover && window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                            try {
+                                await window.audioHover.audioContext.resume();
+                                console.log('✓ Audio context resumed on user interaction');
+                                if (!window.audioHover.isPlaying) {
+                                    window.audioHover.playAll();
+                                    console.log('✓ Playback started on user interaction');
+                                }
+                            } catch (resumeError) {
+                                console.warn('⚠️ Could not resume audio context:', resumeError);
                             }
-                        } catch (error) {
-                            console.warn('⚠️ Auto-play failed:', error);
                         }
                     };
                     
-                    // Try immediately
-                    attemptAutoPlay();
+                    document.addEventListener('click', resumeOnInteraction);
+                    document.addEventListener('touchstart', resumeOnInteraction);
+                    document.addEventListener('keydown', resumeOnInteraction);
+                    document.addEventListener('mousemove', resumeOnInteraction, { once: true });
                     
-                    // Also try after a short delay (sometimes helps)
-                    setTimeout(attemptAutoPlay, 100);
-                } else {
-                    console.warn('⚠️ No sources loaded - cannot auto-play');
+                    return; // Successfully loaded default config
+                } catch (error) {
+                    // Default config doesn't exist - show helpful message
+                    console.warn('⚠️ Default config.json not found:', error);
+                    loadingIndicator.textContent = 'No configuration loaded. Use the control panel (⚙️) to load a config file or URL.';
+                    loadingIndicator.style.color = '#ff9800';
+                    loadingIndicator.classList.add('visible');
+                    
+                    // Initialize controls anyway (for loading configs)
+                    initializeVolumeControls();
+                    return;
+                }
+            } else {
+                // Config parameter provided
+                if (!configUrl.startsWith('http://') && !configUrl.startsWith('https://') && !configUrl.startsWith('data:')) {
+                    // Relative path - construct full URL
+                    const baseUrl = getBaseUrl();
+                    configUrl = baseUrl + configUrl;
                 }
                 
-                // Resume audio context and start playback on any user interaction (for autoplay policy)
-                const resumeOnInteraction = async () => {
-                    if (window.audioHover && window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
-                        try {
-                            await window.audioHover.audioContext.resume();
-                            console.log('✓ Audio context resumed on user interaction');
-                            if (!window.audioHover.isPlaying) {
-                                window.audioHover.playAll();
-                                console.log('✓ Playback started on user interaction');
-                            }
-                        } catch (resumeError) {
-                            console.warn('⚠️ Could not resume audio context:', resumeError);
-                        }
+                console.log('🎯 Loading config from:', configUrl);
+                
+                try {
+                    // Load config
+                    const config = await loadConfigFromUrl(configUrl);
+                    
+                    // Load configuration into player
+                    await loadConfiguration(config);
+                    
+                    // Initialize volume controls after sources are loaded
+                    if (window.audioHover && window.audioHover.sources.length > 0) {
+                        initializeVolumeControls();
+                        updateTracksList();
                     }
-                };
-                
-                // Listen for user interactions (but don't limit to once - allow multiple attempts)
-                document.addEventListener('click', resumeOnInteraction);
-                document.addEventListener('touchstart', resumeOnInteraction);
-                document.addEventListener('keydown', resumeOnInteraction);
-                document.addEventListener('mousemove', resumeOnInteraction, { once: true }); // Also try on first mouse move
-                
-            } catch (error) {
-                console.error('❌ Failed to load configuration:', error);
-                
-                // If it's a 404 and no config parameter was provided, show helpful message
-                const urlParams = new URLSearchParams(window.location.search);
-                const hasConfigParam = urlParams.has('config');
-                
-                if (!hasConfigParam && error.message.includes('404')) {
-                    loadingIndicator.textContent = 'No configuration found. Please provide a config URL parameter.';
-                    loadingIndicator.style.color = '#ff9800';
-                } else {
+                    
+                    // Attempt auto-play immediately (may require user interaction due to browser policies)
+                    if (window.audioHover && window.audioHover.sources.length > 0) {
+                        console.log(`✓ ${window.audioHover.sources.length} sources ready for playback`);
+                        
+                        // Try to resume and play immediately
+                        const attemptAutoPlay = async () => {
+                            try {
+                                // Resume audio context if suspended
+                                if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                                    try {
+                                        await window.audioHover.audioContext.resume();
+                                        console.log('✓ Audio context resumed');
+                                    } catch (resumeError) {
+                                        console.warn('⚠️ Could not resume audio context (will resume on interaction):', resumeError);
+                                    }
+                                }
+                                
+                                // Start playback if context is running
+                                if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'running') {
+                                    window.audioHover.playAll();
+                                    console.log('✓ Auto-play started');
+                                } else {
+                                    console.log('⏸️ Audio context suspended - will start on user interaction');
+                                }
+                            } catch (error) {
+                                console.warn('⚠️ Auto-play failed:', error);
+                            }
+                        };
+                        
+                        // Try immediately
+                        attemptAutoPlay();
+                        
+                        // Also try after a short delay (sometimes helps)
+                        setTimeout(attemptAutoPlay, 100);
+                    } else {
+                        console.warn('⚠️ No sources loaded - cannot auto-play');
+                    }
+                    
+                    // Resume audio context and start playback on any user interaction (for autoplay policy)
+                    const resumeOnInteraction = async () => {
+                        if (window.audioHover && window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                            try {
+                                await window.audioHover.audioContext.resume();
+                                console.log('✓ Audio context resumed on user interaction');
+                                if (!window.audioHover.isPlaying) {
+                                    window.audioHover.playAll();
+                                    console.log('✓ Playback started on user interaction');
+                                }
+                            } catch (resumeError) {
+                                console.warn('⚠️ Could not resume audio context:', resumeError);
+                            }
+                        }
+                    };
+                    
+                    // Listen for user interactions (but don't limit to once - allow multiple attempts)
+                    document.addEventListener('click', resumeOnInteraction);
+                    document.addEventListener('touchstart', resumeOnInteraction);
+                    document.addEventListener('keydown', resumeOnInteraction);
+                    document.addEventListener('mousemove', resumeOnInteraction, { once: true }); // Also try on first mouse move
+                    
+                } catch (error) {
+                    console.error('❌ Failed to load configuration:', error);
                     loadingIndicator.textContent = 'Failed to load audio experience: ' + error.message;
                     loadingIndicator.style.color = '#f44336';
+                    loadingIndicator.classList.add('visible');
+                    
+                    // Initialize controls anyway (for loading configs)
+                    initializeVolumeControls();
                 }
-                // Keep loading indicator visible to show error
             }
         });
 
