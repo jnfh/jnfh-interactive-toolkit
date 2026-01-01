@@ -721,6 +721,95 @@
                 });
             }
             
+            // Config file input
+            const configFileInput = document.getElementById('configFileInput');
+            if (configFileInput) {
+                configFileInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    const statusEl = document.getElementById('configLoadStatus');
+                    statusEl.style.display = 'block';
+                    statusEl.textContent = 'Loading...';
+                    statusEl.style.color = 'rgba(255,255,255,0.7)';
+                    
+                    try {
+                        const text = await file.text();
+                        const config = JSON.parse(text);
+                        
+                        // Check if it's a simple array format
+                        let finalConfig = config;
+                        if (Array.isArray(config) && config.length > 0 && config[0].url) {
+                            finalConfig = convertSimpleArrayToConfig(config);
+                        }
+                        
+                        await loadConfiguration(finalConfig);
+                        
+                        // Initialize controls after loading
+                        if (window.audioHover && window.audioHover.sources.length > 0) {
+                            initializeVolumeControls();
+                            updateTracksList();
+                        }
+                        
+                        statusEl.textContent = '✓ Configuration loaded';
+                        statusEl.style.color = '#4CAF50';
+                        
+                        // Clear file input
+                        configFileInput.value = '';
+                    } catch (error) {
+                        console.error('Error loading config file:', error);
+                        statusEl.textContent = '✗ Error: ' + error.message;
+                        statusEl.style.color = '#f44336';
+                    }
+                });
+            }
+            
+            // Config URL input
+            const loadConfigUrlBtn = document.getElementById('loadConfigUrlBtn');
+            const configUrlInput = document.getElementById('configUrlInput');
+            if (loadConfigUrlBtn && configUrlInput) {
+                loadConfigUrlBtn.addEventListener('click', async () => {
+                    const url = configUrlInput.value.trim();
+                    if (!url) {
+                        alert('Please enter a config URL');
+                        return;
+                    }
+                    
+                    const statusEl = document.getElementById('configLoadStatus');
+                    statusEl.style.display = 'block';
+                    statusEl.textContent = 'Loading...';
+                    statusEl.style.color = 'rgba(255,255,255,0.7)';
+                    
+                    try {
+                        const config = await loadConfigFromUrl(url);
+                        await loadConfiguration(config);
+                        
+                        // Initialize controls after loading
+                        if (window.audioHover && window.audioHover.sources.length > 0) {
+                            initializeVolumeControls();
+                            updateTracksList();
+                        }
+                        
+                        statusEl.textContent = '✓ Configuration loaded';
+                        statusEl.style.color = '#4CAF50';
+                        
+                        // Clear URL input
+                        configUrlInput.value = '';
+                    } catch (error) {
+                        console.error('Error loading config URL:', error);
+                        statusEl.textContent = '✗ Error: ' + error.message;
+                        statusEl.style.color = '#f44336';
+                    }
+                });
+                
+                // Also allow Enter key to load
+                configUrlInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        loadConfigUrlBtn.click();
+                    }
+                });
+            }
+            
             // Master volume control
             if (masterVolumeSlider && window.audioHover) {
                 // Set initial value
