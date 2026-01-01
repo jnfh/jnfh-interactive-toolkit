@@ -1,0 +1,7 @@
+# Notes Audio Files
+# Add your R2 URLs for notes/voice recordings here
+
+# Example:
+# https://pub-xxx.r2.dev/note1.mp3
+# https://pub-xxx.r2.dev/note2.wav
+

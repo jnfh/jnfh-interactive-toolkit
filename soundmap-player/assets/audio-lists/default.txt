@@ -1,0 +1,7 @@
+# Default Audio Files
+# Add your R2 URLs here, one per line or comma-separated
+
+# Example:
+# https://pub-xxx.r2.dev/audio1.mp3
+# https://pub-xxx.r2.dev/audio2.wav
+

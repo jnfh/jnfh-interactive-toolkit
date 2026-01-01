@@ -86,8 +86,17 @@
         </div>
         
         <div id="r2-source" style="display: none;">
-          <input type="text" id="r2-url" placeholder="R2 URL (e.g., https://pub-xxx.r2.dev/file.mp3)">
-          <button id="load-r2-file" class="btn-secondary" style="margin-top: 8px;">Load from R2</button>
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; color: #999;">Load from File List:</label>
+          <select id="r2-file-list-select" style="width: 100%; padding: 10px; background: #2a2a2a; border: 1px solid #444; border-radius: 6px; color: #e0e0e0; font-size: 13px; margin-bottom: 8px;">
+            <option value="">-- Select a file list --</option>
+          </select>
+          <button id="load-r2-file-list" class="btn-secondary" style="margin-top: 8px; width: 100%;">Load Selected List</button>
+          
+          <div style="margin: 12px 0; text-align: center; color: #666; font-size: 11px;">OR</div>
+          
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; color: #999;">Manual URL(s):</label>
+          <input type="text" id="r2-url" placeholder="R2 URL(s) - comma separated for multiple">
+          <button id="load-r2-file" class="btn-secondary" style="margin-top: 8px; width: 100%;">Load from R2</button>
         </div>
         
         <input type="number" id="fade-distance" placeholder="Fade distance (px)" value="100">

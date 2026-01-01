@@ -55,6 +55,7 @@ class SpatialAudioBuilder {
     this.pendingAudio = null;
     this.editingZoneId = null;
     this.multipleR2Files = [];
+    this.audioFileLists = []; // Available audio file lists
     
     // Background image
     this.backgroundImage = null;
@@ -99,8 +100,84 @@ class SpatialAudioBuilder {
     this.setupKeyboardShortcuts();
     this.updateImageControls();
     this.initializeColorPicker();
+    this.loadAudioFileLists();
     
     console.log('Builder ready');
+  }
+  
+  async loadAudioFileLists() {
+    // Look for .txt files in the assets/audio-lists directory
+    // These files should contain one URL per line or comma-separated URLs
+    const listFiles = [
+      'assets/audio-lists/default.txt',
+      'assets/audio-lists/notes.txt',
+      'assets/audio-lists/custom.txt'
+    ];
+    
+    const availableLists = [];
+    
+    for (const filePath of listFiles) {
+      try {
+        const response = await fetch(filePath);
+        if (response.ok) {
+          const text = await response.text();
+          const fileName = filePath.split('/').pop().replace('.txt', '');
+          availableLists.push({
+            name: fileName.charAt(0).toUpperCase() + fileName.slice(1),
+            path: filePath,
+            content: text
+          });
+        }
+      } catch (e) {
+        // File doesn't exist, skip it
+        console.log(`File list not found: ${filePath}`);
+      }
+    }
+    
+    this.audioFileLists = availableLists;
+    this.populateFileListDropdown(availableLists);
+  }
+  
+  populateFileListDropdown(lists) {
+    const select = document.getElementById('r2-file-list-select');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">-- Select a file list --</option>';
+    lists.forEach((list, index) => {
+      const option = document.createElement('option');
+      option.value = index;
+      option.textContent = list.name;
+      select.appendChild(option);
+    });
+  }
+  
+  async loadR2FileList() {
+    const select = document.getElementById('r2-file-list-select');
+    if (!select || select.value === '') {
+      alert('Please select a file list');
+      return;
+    }
+    
+    const listIndex = parseInt(select.value);
+    const fileList = this.audioFileLists[listIndex];
+    if (!fileList) {
+      alert('File list not found');
+      return;
+    }
+    
+    // Parse the file content - support both line-separated and comma-separated URLs
+    const urls = fileList.content
+      .split(/[,\n]/)
+      .map(url => url.trim())
+      .filter(url => url && url.startsWith('http'));
+    
+    if (urls.length === 0) {
+      alert('No valid URLs found in file list');
+      return;
+    }
+    
+    // Load all files from the list
+    await this.loadMultipleR2Files(urls);
   }
   
   initializeColorPicker() {
@@ -693,17 +770,22 @@ class SpatialAudioBuilder {
       }
     }
     
-    // Check if clicking on any zone to select it
+    // Check if clicking on any zone to select it, or deselect if clicking empty space
     if (!this.currentTool) {
       const clickedZone = this.config.audioZones.find(zone => 
         this.pointInShape(pos.x, pos.y, zone.shape)
       );
       if (clickedZone) {
         this.selectedZoneId = clickedZone.id;
+        this.updateZonesList();
+        this.updateCopyPasteButtons();
         this.redraw();
         return;
       } else {
+        // Deselect when clicking empty space
         this.selectedZoneId = null;
+        this.updateZonesList();
+        this.updateCopyPasteButtons();
         this.redraw();
         return;
       }
@@ -1449,6 +1531,14 @@ class SpatialAudioBuilder {
     document.getElementById('load-r2-file').addEventListener('click', async () => {
       await this.loadR2File();
     });
+    
+    // Load R2 file list
+    const loadR2FileListBtn = document.getElementById('load-r2-file-list');
+    if (loadR2FileListBtn) {
+      loadR2FileListBtn.addEventListener('click', async () => {
+        await this.loadR2FileList();
+      });
+    }
     
     // Assign audio
     document.getElementById('assign-audio').addEventListener('click', async () => {
