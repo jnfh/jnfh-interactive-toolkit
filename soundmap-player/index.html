@@ -45,6 +45,7 @@
       
       <div id="edit-panel" class="control-group">
         <h3>Drawing Tools</h3>
+        <button id="tool-select" class="btn-secondary" style="margin-bottom: 8px;">Select/Move</button>
         <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
           <button id="tool-path" class="btn-secondary" style="flex: 1; min-width: 80px;">Path</button>
           <button id="tool-rectangle" class="btn-secondary" style="flex: 1; min-width: 80px;">Rectangle</button>
@@ -99,6 +100,10 @@
       
       <div id="sources-list" class="control-group">
         <h3>Audio Zones (<span id="source-count">0</span>)</h3>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button id="copy-zone" class="btn-secondary" style="flex: 1;">Copy</button>
+          <button id="paste-zone" class="btn-secondary" style="flex: 1;">Paste</button>
+        </div>
         <div id="source-items"></div>
       </div>
       
@@ -132,7 +137,13 @@
           • Rectangle/Circle: Click & drag<br>
           • Path: Click & drag (freehand)<br>
           • Polygon: Click points, double-click to finish<br>
-          • Double-click zone to edit, × to delete<br>
+          <br>
+          <strong>Editing:</strong><br>
+          • Select/Move tool: Click zone to select, drag to move<br>
+          • Drag corners/handles to resize<br>
+          • Double-click zone to edit properties<br>
+          • Copy (Ctrl+C) / Paste (Ctrl+V) zones<br>
+          • Delete key to remove selected zone<br>
           <br>
           <strong>Preview:</strong><br>
           • Move mouse to hear spatial audio<br>
