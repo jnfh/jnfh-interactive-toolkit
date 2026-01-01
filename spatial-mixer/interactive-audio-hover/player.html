@@ -256,6 +256,29 @@
             right: 20px;
         }
 
+        .close-panel-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .close-panel-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
         @media (max-width: 768px) {
             .control-panel {
                 bottom: 10px;
@@ -283,6 +306,7 @@
     
     <!-- Volume Control Panel -->
     <div class="control-panel hidden" id="controlPanel">
+        <button class="close-panel-btn" id="closePanelBtn" title="Close">×</button>
         <div class="control-panel-header">Audio Controls</div>
         
         <!-- Load Config Section -->
@@ -312,15 +336,6 @@
             <input type="range" class="volume-slider" id="masterVolumeSlider" min="0" max="100" value="100">
         </div>
         
-        <!-- Track Mute Controls -->
-        <div class="control-group">
-            <div class="control-label">
-                <span class="control-label-text">Tracks</span>
-            </div>
-            <div class="tracks-list" id="tracksList">
-                <!-- Tracks will be populated by JavaScript -->
-            </div>
-        </div>
     </div>
     
     <!-- Toggle Panel Button -->
@@ -644,13 +659,15 @@
                                     }
                                 }
                                 
-                                // Start playback if context is running
-                                if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'running') {
+                            // Start playback if context is running
+                            if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'running') {
+                                if (!window.audioHover.isPlaying) {
                                     window.audioHover.playAll();
                                     console.log('✓ Auto-play started');
-                                } else {
-                                    console.log('⏸️ Audio context suspended - will start on user interaction');
                                 }
+                            } else {
+                                console.log('⏸️ Audio context suspended - will start on user interaction');
+                            }
                             } catch (error) {
                                 console.warn('⚠️ Auto-play failed:', error);
                             }
@@ -699,83 +716,6 @@
             }
         });
 
-        // Initialize mute functionality for sources
-        function initializeMuteFunctionality() {
-            if (!window.audioHover) return;
-            
-            // Add mute methods to InteractiveAudioHover prototype
-            if (!window.audioHover.muteSource) {
-                window.audioHover.muteSource = function(sourceId) {
-                    const source = this.sources.find(s => s.id === sourceId);
-                    if (!source) return;
-                    
-                    // Initialize isMuted if not exists
-                    if (source.isMuted === undefined) {
-                        source.isMuted = false;
-                    }
-                    
-                    source.isMuted = true;
-                    
-                    // Immediately set volume to 0
-                    if (source.gainNode) {
-                        const currentTime = this.audioContext.currentTime;
-                        source.gainNode.gain.cancelScheduledValues(currentTime);
-                        source.gainNode.gain.setValueAtTime(source.gainNode.gain.value, currentTime);
-                        source.gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.1);
-                    }
-                    
-                    console.log(`🔇 Muted track: ${source.name || source.editableTitle}`);
-                };
-            }
-            
-            if (!window.audioHover.unmuteSource) {
-                window.audioHover.unmuteSource = function(sourceId) {
-                    const source = this.sources.find(s => s.id === sourceId);
-                    if (!source || !source.isMuted) return;
-                    
-                    source.isMuted = false;
-                    
-                    // Volume will be restored by the updateAudioVolumes loop based on proximity
-                    // No need to manually restore - the animation loop will handle it
-                    
-                    console.log(`🔊 Unmuted track: ${source.name || source.editableTitle}`);
-                };
-            }
-            
-            if (!window.audioHover.toggleMuteSource) {
-                window.audioHover.toggleMuteSource = function(sourceId) {
-                    const source = this.sources.find(s => s.id === sourceId);
-                    if (!source) return;
-                    
-                    if (source.isMuted) {
-                        this.unmuteSource(sourceId);
-                    } else {
-                        this.muteSource(sourceId);
-                    }
-                };
-            }
-            
-            // Override updateAudioVolumes to respect mute state
-            const originalUpdateAudioVolumes = window.audioHover.updateAudioVolumes;
-            if (originalUpdateAudioVolumes) {
-                window.audioHover.updateAudioVolumes = function() {
-                    // Call original update
-                    originalUpdateAudioVolumes.call(this);
-                    
-                    // Apply mute state to all sources after volume calculation
-                    this.sources.forEach(source => {
-                        if (source.isMuted && source.gainNode) {
-                            const currentTime = this.audioContext.currentTime;
-                            const currentGain = source.gainNode.gain.value;
-                            // Force volume to 0 if muted
-                            source.gainNode.gain.cancelScheduledValues(currentTime);
-                            source.gainNode.gain.setValueAtTime(currentGain, currentTime);
-                            source.gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.1);
-                        }
-                    });
-                };
-            }
-        }
 
         // Initialize volume controls
         function initializeVolumeControls() {
@@ -896,65 +836,14 @@
                 });
             }
             
-            // Initialize mute functionality
-            initializeMuteFunctionality();
-        }
-
-        // Update tracks list in control panel
-        function updateTracksList() {
-            const tracksList = document.getElementById('tracksList');
-            if (!tracksList || !window.audioHover) return;
-            
-            tracksList.innerHTML = '';
-            
-            window.audioHover.sources.forEach(source => {
-                // Initialize isMuted if not exists
-                if (source.isMuted === undefined) {
-                    source.isMuted = false;
-                }
-                
-                const trackItem = document.createElement('div');
-                trackItem.className = 'track-item';
-                
-                const colorDot = document.createElement('div');
-                colorDot.className = 'track-color';
-                colorDot.style.backgroundColor = source.color || '#ffffff';
-                
-                const trackName = document.createElement('div');
-                trackName.className = 'track-name';
-                trackName.textContent = source.editableTitle || source.name || 'Untitled Track';
-                
-                const muteBtn = document.createElement('button');
-                muteBtn.className = 'track-mute-btn' + (source.isMuted ? ' muted' : '');
-                muteBtn.textContent = source.isMuted ? 'Unmute' : 'Mute';
-                muteBtn.addEventListener('click', () => {
-                    window.audioHover.toggleMuteSource(source.id);
-                    // Update button state after toggle
-                    const isNowMuted = source.isMuted;
-                    muteBtn.textContent = isNowMuted ? 'Unmute' : 'Mute';
-                    if (isNowMuted) {
-                        muteBtn.classList.add('muted');
-                    } else {
-                        muteBtn.classList.remove('muted');
-                    }
+            // Close panel button
+            const closePanelBtn = document.getElementById('closePanelBtn');
+            if (closePanelBtn) {
+                closePanelBtn.addEventListener('click', () => {
+                    controlPanel.classList.add('hidden');
                 });
-                
-                trackItem.appendChild(colorDot);
-                trackItem.appendChild(trackName);
-                trackItem.appendChild(muteBtn);
-                tracksList.appendChild(trackItem);
-            });
-        }
-        
-        // Re-update tracks list when sources change (polling approach for simplicity)
-        setInterval(() => {
-            if (window.audioHover && document.getElementById('tracksList')) {
-                const currentCount = document.querySelectorAll('.track-item').length;
-                if (currentCount !== window.audioHover.sources.length) {
-                    updateTracksList();
-                }
             }
-        }, 1000);
+        }
     </script>
 </body>
 </html>
