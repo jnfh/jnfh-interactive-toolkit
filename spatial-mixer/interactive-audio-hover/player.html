@@ -507,11 +507,12 @@
             const urlParams = new URLSearchParams(window.location.search);
             let configUrl = urlParams.get('config');
             
-            // If no config parameter, use default config.json
+            // If no config parameter, try default config.json, but don't fail if it doesn't exist
             if (!configUrl) {
                 const baseUrl = getBaseUrl();
                 configUrl = baseUrl + 'config.json';
-            } else if (!configUrl.startsWith('http://') && !configUrl.startsWith('https://')) {
+                console.log('🎯 No config parameter, trying default:', configUrl);
+            } else if (!configUrl.startsWith('http://') && !configUrl.startsWith('https://') && !configUrl.startsWith('data:')) {
                 // Relative path - construct full URL
                 const baseUrl = getBaseUrl();
                 configUrl = baseUrl + configUrl;
@@ -594,8 +595,18 @@
                 
             } catch (error) {
                 console.error('❌ Failed to load configuration:', error);
-                loadingIndicator.textContent = 'Failed to load audio experience';
-                loadingIndicator.style.color = '#f44336';
+                
+                // If it's a 404 and no config parameter was provided, show helpful message
+                const urlParams = new URLSearchParams(window.location.search);
+                const hasConfigParam = urlParams.has('config');
+                
+                if (!hasConfigParam && error.message.includes('404')) {
+                    loadingIndicator.textContent = 'No configuration found. Please provide a config URL parameter.';
+                    loadingIndicator.style.color = '#ff9800';
+                } else {
+                    loadingIndicator.textContent = 'Failed to load audio experience: ' + error.message;
+                    loadingIndicator.style.color = '#f44336';
+                }
                 // Keep loading indicator visible to show error
             }
         });
