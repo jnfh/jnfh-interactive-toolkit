@@ -600,17 +600,28 @@
                 
                 <!-- Embed Code Modal -->
                 <div id="embedModal" style="display: none; margin-top: 20px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);">
-                    <h4 style="margin-bottom: 15px; font-size: 1.1rem;">🔗 Embeddable Player</h4>
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; opacity: 0.8;">Player URL:</label>
-                        <a id="embedUrlDisplay" href="#" target="_blank" style="display: block; word-break: break-all; color: #2196F3; text-decoration: underline; font-size: 0.85rem;"></a>
+                    <h4 style="margin-bottom: 15px; font-size: 1.1rem;">🔗 Embeddable Player for Wix Studio</h4>
+                    <div style="margin-bottom: 15px; padding: 10px; background: rgba(33, 150, 243, 0.1); border-radius: 8px; border-left: 3px solid #2196F3;">
+                        <p style="font-size: 0.85rem; margin: 0; line-height: 1.5;">
+                            <strong>How to use in Wix Studio:</strong><br>
+                            1. Copy the embed code below<br>
+                            2. In Wix Studio, add an "HTML iframe" element<br>
+                            3. Paste the embed code<br>
+                            4. Adjust size as needed (recommended: 100% width, 600px height)
+                        </p>
                     </div>
                     <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; opacity: 0.8;">Embed Code:</label>
-                        <textarea id="embedCodeTextarea" rows="3" readonly style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: monospace; font-size: 0.85rem; resize: vertical;"></textarea>
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; opacity: 0.8;">Unique Player URL:</label>
+                        <a id="embedUrlDisplay" href="#" target="_blank" style="display: block; word-break: break-all; color: #2196F3; text-decoration: underline; font-size: 0.85rem; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px;"></a>
+                        <p style="font-size: 0.75rem; opacity: 0.7; margin-top: 5px;">Each configuration gets a unique URL with embedded settings</p>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; opacity: 0.8;">Embed Code (for Wix Studio):</label>
+                        <textarea id="embedCodeTextarea" rows="8" readonly style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: monospace; font-size: 0.8rem; resize: vertical;"></textarea>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="copyEmbedCodeBtn" class="btn btn-primary" style="flex: 1;">📋 Copy Embed Code</button>
+                        <button id="copyUrlBtn" class="btn btn-secondary" style="flex: 1;">🔗 Copy URL</button>
                         <button id="closeEmbedModalBtn" class="btn btn-secondary">Close</button>
                     </div>
                 </div>
