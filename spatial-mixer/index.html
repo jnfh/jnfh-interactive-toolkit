@@ -973,15 +973,45 @@
                     finalConfigUrl = `data:application/json;base64,${base64Config}`;
                 }
                 
-                // Generate player URL with config
-                const playerBaseUrl = window.location.origin + '/spatial-mixer/interactive-audio-hover/player.html';
+                // Generate player URL with config - force HTTPS
+                let playerBaseUrl = window.location.origin + '/spatial-mixer/interactive-audio-hover/player.html';
+                // Ensure HTTPS
+                if (playerBaseUrl.startsWith('http://')) {
+                    playerBaseUrl = playerBaseUrl.replace('http://', 'https://');
+                }
                 embedUrl = `${playerBaseUrl}?config=${encodeURIComponent(finalConfigUrl)}`;
                 
-                // Generate embed codes optimized for Wix Studio
+                // Generate embed codes optimized for Wix Studio (HTTPS only)
                 const wixEmbedCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allow="autoplay; microphone" style="border: none;"></iframe>`;
                 
                 // Alternative: Responsive embed code
                 const responsiveEmbedCode = `<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;"><iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;" allow="autoplay; microphone"></iframe></div>`;
+                
+                // Generate standalone HTML file content
+                const htmlFileContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Audio Player</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        iframe {
+            width: 100%;
+            height: 100vh;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    ${wixEmbedCode}
+</body>
+</html>`;
                 
                 // Show modal with embed code
                 if (embedModal) {
