@@ -521,38 +521,10 @@
                 <div class="controls-row">
                     <input type="file" id="audioFileInput" accept="audio/*" multiple>
                     <label for="audioFileInput" class="btn btn-upload">📁 Add Audio Files</label>
-                    <button id="loadR2Btn" class="btn btn-upload">☁️ Load from R2</button>
                     <button id="loadUrlBtn" class="btn btn-upload">🔗 Load from URLs</button>
                     <button id="loadWixCmsBtn" class="btn btn-upload">📊 Load from Wix CMS</button>
                     <button id="loadDropboxBtn" class="btn btn-upload">☁️ Load from Dropbox</button>
                     <button id="clearBtn" class="btn btn-secondary">🗑️ Clear All</button>
-                </div>
-                <div id="r2Section" style="display: none; margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
-                    <div class="control-group" style="margin-bottom: 10px;">
-                        <label style="display: block; margin-bottom: 8px; font-size: 12px; color: #999;">1. Select File List:</label>
-                        <select id="r2-file-list-select" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; font-size: 13px; margin-bottom: 8px;">
-                            <option value="">-- Select a file list --</option>
-                        </select>
-                        
-                        <div id="r2-file-list-files" style="display: none; margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 8px; font-size: 12px; color: #999;">2. Select File:</label>
-                            <select id="r2-file-from-list" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; font-size: 13px; margin-bottom: 8px;">
-                                <option value="">-- Select a file --</option>
-                            </select>
-                            <button id="load-selected-r2-file" class="btn btn-primary" style="margin-top: 8px; width: 100%;">3. Load Selected File</button>
-                        </div>
-                        
-                        <div style="margin: 16px 0; text-align: center; color: rgba(255,255,255,0.5); font-size: 11px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">OR</div>
-                        
-                        <label style="display: block; margin-bottom: 8px; font-size: 12px; color: #999;">Manual URL(s):</label>
-                        <input type="text" id="r2-url-input" placeholder="R2 URL(s) - comma separated for multiple" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: inherit; margin-bottom: 8px;">
-                        <button id="load-r2-url-btn" class="btn btn-primary" style="width: 100%;">Load from R2</button>
-                        
-                        <div id="r2-loading-status" style="display: none; margin-top: 12px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 12px; color: #999;"></div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="closeR2Btn" class="btn btn-secondary">Cancel</button>
-                    </div>
                 </div>
                 <div id="urlSection" style="display: none; margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
                     <div class="control-group" style="margin-bottom: 10px;">
@@ -622,8 +594,27 @@
                     <button id="exportConfigBtn" class="btn btn-export">💾 Export Config (No Audio)</button>
                     <button id="exportWithAudioBtn" class="btn btn-export">💾 Export Config + Audio</button>
                     <button id="copyConfigBtn" class="btn btn-export">📋 Copy Config</button>
+                    <button id="generateEmbedBtn" class="btn btn-export">🔗 Generate Embed Code</button>
                 </div>
                 <div id="exportStatus" class="export-status" style="display: none;"></div>
+                
+                <!-- Embed Code Modal -->
+                <div id="embedModal" style="display: none; margin-top: 20px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);">
+                    <h4 style="margin-bottom: 15px; font-size: 1.1rem;">🔗 Embeddable Player</h4>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; opacity: 0.8;">Player URL:</label>
+                        <a id="embedUrlDisplay" href="#" target="_blank" style="display: block; word-break: break-all; color: #2196F3; text-decoration: underline; font-size: 0.85rem;"></a>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; opacity: 0.8;">Embed Code:</label>
+                        <textarea id="embedCodeTextarea" rows="3" readonly style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: monospace; font-size: 0.85rem; resize: vertical;"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="copyEmbedCodeBtn" class="btn btn-primary" style="flex: 1;">📋 Copy Embed Code</button>
+                        <button id="closeEmbedModalBtn" class="btn btn-secondary">Close</button>
+                    </div>
+                </div>
+                
                 <div id="exportProgressContainer" style="display: none; margin-top: 15px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem;">
                         <span id="exportProgressText">Processing...</span>
@@ -1135,21 +1126,6 @@
                 }
             });
 
-            document.getElementById('closeR2Btn').addEventListener('click', () => {
-                const r2Section = document.getElementById('r2Section');
-                if (r2Section) {
-                    r2Section.style.display = 'none';
-                    document.getElementById('r2-url-input').value = '';
-                    document.getElementById('r2-loading-status').style.display = 'none';
-                    document.getElementById('r2-file-list-select').value = '';
-                    document.getElementById('r2-file-list-files').style.display = 'none';
-                    // Clear pending URLs
-                    window.audioHover.pendingAudioUrls = [];
-                    window.audioHover.sourcePlacementMode = false;
-                    window.audioHover.canvas.style.cursor = 'default';
-                }
-            });
-
             document.getElementById('closeUrlBtn').addEventListener('click', () => {
                 const urlSection = document.getElementById('urlSection');
                 if (urlSection) {
@@ -1220,157 +1196,6 @@
                 
                 console.log(`✓ ${validUrls.length} URL(s) validated and ready for placement`);
             });
-
-            // R2 File List Loading Functions
-            async function loadR2FileLists() {
-                const fileListSelect = document.getElementById('r2-file-list-select');
-                if (!fileListSelect) return;
-                
-                try {
-                    // Load file lists from assets/audio-lists/
-                    const baseUrl = window.location.origin + '/soundmap-player/assets/audio-lists/';
-                    const response = await fetch(baseUrl);
-                    
-                    // Since we can't list directories directly, we'll try common filenames
-                    const commonFiles = ['notes.txt', 'tubemusicclips.txt'];
-                    const availableFiles = [];
-                    
-                    for (const filename of commonFiles) {
-                        try {
-                            const fileResponse = await fetch(baseUrl + filename);
-                            if (fileResponse.ok) {
-                                availableFiles.push(filename);
-                            }
-                        } catch (e) {
-                            // File doesn't exist, skip
-                        }
-                    }
-                    
-                    // Populate dropdown
-                    fileListSelect.innerHTML = '<option value="">-- Select a file list --</option>';
-                    availableFiles.forEach(filename => {
-                        const option = document.createElement('option');
-                        option.value = filename;
-                        option.textContent = filename.replace('.txt', '');
-                        fileListSelect.appendChild(option);
-                    });
-                } catch (error) {
-                    console.error('Error loading R2 file lists:', error);
-                }
-            }
-
-            document.getElementById('r2-file-list-select').addEventListener('change', async function() {
-                const selectedFile = this.value;
-                const filesContainer = document.getElementById('r2-file-list-files');
-                const fileSelect = document.getElementById('r2-file-from-list');
-                
-                if (!selectedFile) {
-                    filesContainer.style.display = 'none';
-                    return;
-                }
-                
-                try {
-                    const baseUrl = window.location.origin + '/soundmap-player/assets/audio-lists/';
-                    const response = await fetch(baseUrl + selectedFile);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    
-                    const text = await response.text();
-                    const urls = text.split('\n')
-                        .map(line => line.trim())
-                        .filter(line => line && !line.startsWith('#') && !line.startsWith('//'));
-                    
-                    fileSelect.innerHTML = '<option value="">-- Select a file --</option>';
-                    urls.forEach(url => {
-                        const option = document.createElement('option');
-                        option.value = url;
-                        const fileName = url.split('/').pop().replace(/%23/g, '#');
-                        option.textContent = fileName;
-                        fileSelect.appendChild(option);
-                    });
-                    
-                    filesContainer.style.display = 'block';
-                } catch (error) {
-                    console.error('Error loading file list:', error);
-                    alert('Failed to load file list: ' + error.message);
-                }
-            });
-
-            document.getElementById('load-selected-r2-file').addEventListener('click', async function() {
-                const fileSelect = document.getElementById('r2-file-from-list');
-                const statusDiv = document.getElementById('r2-loading-status');
-                
-                if (!fileSelect || !fileSelect.value) {
-                    alert('Please select a file from the list');
-                    return;
-                }
-                
-                const url = fileSelect.value;
-                await loadR2Url(url, statusDiv);
-            });
-
-            document.getElementById('load-r2-url-btn').addEventListener('click', async function() {
-                const urlInput = document.getElementById('r2-url-input');
-                const statusDiv = document.getElementById('r2-loading-status');
-                
-                if (!urlInput || !urlInput.value.trim()) {
-                    alert('Please enter an R2 URL or comma-separated URLs');
-                    return;
-                }
-                
-                const urls = urlInput.value.split(',').map(url => url.trim()).filter(url => url);
-                
-                if (urls.length > 1) {
-                    // Multiple URLs - add to pendingAudioUrls for placement
-                    window.audioHover.pendingAudioUrls = urls;
-                    window.audioHover.sourcePlacementMode = true;
-                    window.audioHover.canvas.style.cursor = 'crosshair';
-                    
-                    if (statusDiv) {
-                        statusDiv.style.display = 'block';
-                        statusDiv.textContent = `✓ ${urls.length} URL(s) ready! Click on canvas to place each source.`;
-                        statusDiv.style.color = '#4CAF50';
-                    }
-                } else {
-                    // Single URL - load directly
-                    await loadR2Url(urls[0], statusDiv);
-                }
-            });
-
-            async function loadR2Url(url, statusDiv) {
-                if (statusDiv) {
-                    statusDiv.style.display = 'block';
-                    statusDiv.textContent = 'Loading...';
-                    statusDiv.style.color = '#999';
-                }
-                
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                    
-                    // Add to pendingAudioUrls for placement
-                    if (!window.audioHover.pendingAudioUrls) {
-                        window.audioHover.pendingAudioUrls = [];
-                    }
-                    window.audioHover.pendingAudioUrls.push(url);
-                    window.audioHover.sourcePlacementMode = true;
-                    window.audioHover.canvas.style.cursor = 'crosshair';
-                    
-                    const fileName = url.split('/').pop().replace(/%23/g, '#');
-                    if (statusDiv) {
-                        statusDiv.textContent = `✓ Loaded: ${fileName}. Click on canvas to place source.`;
-                        statusDiv.style.color = '#4CAF50';
-                    }
-                } catch (error) {
-                    console.error('Error loading R2 file:', error);
-                    if (statusDiv) {
-                        statusDiv.textContent = `✗ Failed: ${error.message}`;
-                        statusDiv.style.color = '#ff4444';
-                    }
-                    alert('Failed to load file: ' + error.message);
-                }
-            }
 
             // Dropbox handlers (if they exist)
             const loadDropboxBtn = document.getElementById('loadDropboxBtn');

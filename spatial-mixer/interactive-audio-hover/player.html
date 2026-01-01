@@ -3,24 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Interactive Audio Hover Player - Play interactive audio experiences">
-    <title>Interactive Audio Hover Player</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="description" content="Interactive Audio Hover Experience - Embedded Player">
+    <title>Interactive Audio Experience</title>
     <style>
-        :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --glass-bg: rgba(255, 255, 255, 0.1);
-            --glass-border: rgba(255, 255, 255, 0.2);
-            --text-primary: #ffffff;
-            --text-secondary: rgba(255, 255, 255, 0.8);
-            --accent-green: #4CAF50;
-            --accent-blue: #2196F3;
-            --accent-red: #f44336;
-            --shadow: 0 8px 32px rgba(0,0,0,0.3);
-        }
-
         * {
             margin: 0;
             padding: 0;
@@ -28,14 +13,11 @@
         }
 
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: transparent;
             margin: 0;
             padding: 0;
             min-height: 100vh;
-            color: var(--text-primary);
             overflow: hidden;
-            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5);
+            background: transparent;
         }
 
         /* Full screen canvas */
@@ -51,903 +33,294 @@
             z-index: 1;
         }
 
-        /* Load overlay */
-        .load-overlay {
+        /* Minimal loading indicator */
+        .loading-indicator {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.85);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-
-        .load-overlay.hidden {
-            opacity: 0;
-            visibility: hidden;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
             pointer-events: none;
-            display: none; /* Completely hide for embedded players */
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
-        /* Hide overlay by default for auto-loading on web servers */
-        .load-overlay.auto-load {
-            display: none;
-        }
-        
-        /* Show overlay when file:// detected (not hidden) */
-        .load-overlay.auto-load:not(.hidden) {
-            display: flex !important;
-            opacity: 1 !important;
-            visibility: visible !important;
-            pointer-events: auto !important;
-        }
-
-        .load-content {
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
-            box-shadow: var(--shadow);
-            text-align: center;
-        }
-
-        .load-content h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 8px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
-        }
-
-        .load-content p {
-            font-size: 1rem;
-            opacity: 0.9;
-            margin-bottom: 30px;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.8), 0 0 6px rgba(0,0,0,0.6);
-        }
-
-        /* Settings toggle button */
-        .settings-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 50px;
-            padding: 12px 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 1rem;
-            font-weight: 500;
-            color: var(--text-primary);
-            box-shadow: var(--shadow);
-            transition: all 0.3s ease;
-        }
-
-        .settings-toggle:hover {
-            background: rgba(255, 255, 255, 0.15);
-            transform: translateY(-2px);
-        }
-
-        .settings-toggle.hidden {
-            display: none;
-        }
-
-        /* Settings panel */
-        .settings-panel {
-            position: fixed;
-            top: 0;
-            right: -450px;
-            width: 450px;
-            height: 100vh;
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-left: 1px solid var(--glass-border);
-            box-shadow: -8px 0 32px rgba(0,0,0,0.3);
-            z-index: 999;
-            overflow-y: auto;
-            overflow-x: hidden;
-            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            padding: 20px;
-        }
-
-        .settings-panel.open {
-            right: 0;
-        }
-
-        .settings-panel.hidden {
-            display: none;
-        }
-
-        .settings-panel::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .settings-panel::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.1);
-        }
-
-        .settings-panel::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-        }
-
-        .settings-panel::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        /* Glass morphism panels */
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-radius: 15px;
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--shadow);
-            padding: 20px;
-            margin-bottom: 15px;
-        }
-
-        /* Controls */
-        .controls-section {
-            margin-bottom: 20px;
-        }
-
-        .section-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 15px;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .section-header h3 {
-            font-size: 1.2rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
-        }
-
-        .section-toggle {
-            font-size: 1.5rem;
-            transition: transform 0.3s ease;
-        }
-
-        .section-toggle.collapsed {
-            transform: rotate(-90deg);
-        }
-
-        .section-content {
-            overflow: hidden;
-            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-            max-height: 2000px;
+        .loading-indicator.visible {
             opacity: 1;
         }
 
-        .section-content.collapsed {
-            max-height: 0;
-            margin: 0;
-            padding: 0;
+        .loading-indicator.hidden {
             opacity: 0;
-        }
-
-        .controls-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 15px;
-        }
-
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .control-group label {
-            font-size: 0.9rem;
-            font-weight: 500;
-            opacity: 0.9;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
-        }
-
-        input[type="range"] {
-            width: 100%;
-            height: 6px;
-            border-radius: 3px;
-            background: rgba(255, 255, 255, 0.2);
-            outline: none;
-            cursor: pointer;
-            -webkit-appearance: none;
-            appearance: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: var(--accent-blue);
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        }
-
-        input[type="range"]::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: var(--accent-blue);
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        }
-
-        input[type="color"] {
-            -webkit-appearance: none;
-            appearance: none;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            cursor: pointer;
-            background: transparent;
-            transition: all 0.3s ease;
-        }
-
-        input[type="color"]::-webkit-color-swatch-wrapper {
-            padding: 0;
-        }
-
-        input[type="color"]::-webkit-color-swatch {
-            border: none;
-            border-radius: 6px;
-        }
-
-        input[type="color"]:hover {
-            border-color: rgba(255, 255, 255, 0.5);
-            transform: scale(1.05);
-        }
-
-        .control-value {
-            font-size: 0.85rem;
-            opacity: 0.8;
-            font-weight: 500;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
-        }
-
-        /* Buttons */
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-family: inherit;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-primary {
-            background: var(--accent-green);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #45a049;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-        }
-
-        .btn-secondary {
-            background: var(--accent-red);
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #da190b;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
-        }
-
-        .btn-load {
-            background: var(--accent-blue);
-            color: white;
-        }
-
-        .btn-load:hover {
-            background: #0b7dda;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
-        }
-
-        input[type="file"] {
             display: none;
         }
 
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
+        /* Volume Control Panel */
+        .control-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(20, 20, 20, 0.9);
+            border-radius: 12px;
+            padding: 20px;
+            z-index: 100;
+            min-width: 280px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: rgba(255, 255, 255, 0.9);
+            max-height: 80vh;
+            overflow-y: auto;
+            transition: opacity 0.3s ease, transform 0.3s ease;
         }
 
-        .status-item {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 12px;
-            border-radius: 10px;
-            font-size: 0.9rem;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+        .control-panel.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(20px);
         }
 
-        .status-item strong {
-            display: block;
-            opacity: 0.7;
-            font-size: 0.8rem;
-            margin-bottom: 5px;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
-        }
-
-        .status-item span {
-            font-size: 1.2rem;
+        .control-panel-header {
+            font-size: 16px;
             font-weight: 600;
-            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .load-status {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            font-size: 0.9rem;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+        .control-group {
+            margin-bottom: 20px;
         }
 
-        /* Mobile optimizations */
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .control-label-text {
+            font-weight: 500;
+        }
+
+        .control-value {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .volume-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease;
+        }
+
+        .volume-slider::-moz-range-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        .tracks-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .track-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .track-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .track-name {
+            flex: 1;
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 12px;
+        }
+
+        .track-mute-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.7);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .track-mute-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .track-mute-btn.muted {
+            background: rgba(255, 80, 80, 0.3);
+            border-color: rgba(255, 80, 80, 0.5);
+            color: rgba(255, 150, 150, 0.9);
+        }
+
+        .track-mute-btn.muted:hover {
+            background: rgba(255, 80, 80, 0.4);
+        }
+
+        .toggle-panel-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(20, 20, 20, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            z-index: 101;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .toggle-panel-btn:hover {
+            background: rgba(30, 30, 30, 0.95);
+            transform: scale(1.05);
+        }
+
+        .control-panel:not(.hidden) ~ .toggle-panel-btn {
+            bottom: auto;
+            right: auto;
+            top: 20px;
+            right: 20px;
+        }
+
         @media (max-width: 768px) {
-            .settings-panel {
-                width: 100vw;
-                right: -100vw;
+            .control-panel {
+                bottom: 10px;
+                right: 10px;
+                left: 10px;
+                min-width: auto;
+                max-width: none;
             }
 
-            .settings-toggle {
+            .toggle-panel-btn {
+                bottom: 10px;
+                right: 10px;
+            }
+
+            .control-panel:not(.hidden) ~ .toggle-panel-btn {
                 top: 10px;
                 right: 10px;
-                padding: 10px 15px;
-                font-size: 0.9rem;
-            }
-
-            .glass-panel {
-                padding: 15px;
-            }
-
-            .controls-row {
-                grid-template-columns: 1fr;
-                gap: 15px;
-            }
-
-            .load-content {
-                padding: 30px 20px;
-            }
-        }
-
-        /* Touch support */
-        @media (hover: none) {
-            .btn:hover {
-                transform: none;
             }
         }
     </style>
 </head>
 <body>
     <canvas id="audioCanvas"></canvas>
-
-    <!-- Load Overlay (hidden by default - auto-loads config) -->
-    <div class="load-overlay auto-load hidden" id="loadOverlay">
-        <div class="load-content">
-            <h1>🎵 Interactive Audio Hover Player</h1>
-            <p>Load a configuration file to start exploring the interactive audio experience</p>
-            
-            <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
-                <input type="file" id="configFileInput" accept=".json">
-                <label for="configFileInput" class="btn btn-load">📂 Load Config File</label>
-                <input type="file" id="audioFilesInput" accept="audio/*" multiple>
-                <label for="audioFilesInput" class="btn btn-load">🎵 Add Audio Files (if needed)</label>
-                <button id="loadConfigBtn" class="btn btn-primary">📥 Load Configuration</button>
+    <div class="loading-indicator" id="loadingIndicator">Loading audio experience...</div>
+    
+    <!-- Volume Control Panel -->
+    <div class="control-panel hidden" id="controlPanel">
+        <div class="control-panel-header">Audio Controls</div>
+        
+        <!-- Master Volume Control -->
+        <div class="control-group">
+            <div class="control-label">
+                <span class="control-label-text">Master Volume</span>
+                <span class="control-value" id="masterVolumeValue">100%</span>
             </div>
-            
-            <div id="loadStatus" class="load-status" style="display: none;"></div>
+            <input type="range" class="volume-slider" id="masterVolumeSlider" min="0" max="100" value="100">
         </div>
-    </div>
-
-    <!-- Settings Toggle -->
-    <button class="settings-toggle hidden" id="settingsToggle" onclick="toggleSettingsPanel()">
-        <span>⚙️</span>
-        <span id="settingsToggleText">Settings</span>
-    </button>
-
-    <!-- Settings Panel -->
-    <div class="settings-panel hidden" id="settingsPanel">
-        <div style="margin-bottom: 20px;">
-            <h1 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 5px; text-shadow: 2px 2px 8px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);">🎵 Audio Player</h1>
-            <p style="font-size: 0.9rem; opacity: 0.8; margin-bottom: 20px; text-shadow: 1px 1px 3px rgba(0,0,0,0.8), 0 0 6px rgba(0,0,0,0.6);">Move your mouse to explore the soundscape</p>
-        </div>
-
-        <div class="glass-panel controls-section">
-            <div class="section-header" onclick="toggleSection('main-controls')">
-                <h3>🎛️ Controls</h3>
-                <span class="section-toggle" id="main-controls-toggle">▼</span>
+        
+        <!-- Track Mute Controls -->
+        <div class="control-group">
+            <div class="control-label">
+                <span class="control-label-text">Tracks</span>
             </div>
-            <div class="section-content" id="main-controls">
-                <div class="controls-row">
-                    <button id="playBtn" class="btn btn-primary">▶ Play</button>
-                    <button id="stopBtn" class="btn btn-secondary">⏹ Stop</button>
-                    <div class="control-group">
-                        <label for="masterVolume">Master Volume</label>
-                        <input type="range" id="masterVolume" min="0" max="100" value="40">
-                        <span class="control-value" id="masterVolumeValue">40%</span>
-                    </div>
-                    <div class="control-group">
-                        <label for="backgroundColor">Background Color</label>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <input type="color" id="backgroundColor" value="#000000" style="width: 60px; height: 40px; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; cursor: pointer; background: transparent;">
-                                <button id="resetBgColorBtn" class="btn btn-secondary" style="padding: 8px 12px; font-size: 0.85rem;">Reset</button>
-                            </div>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem;">
-                                <input type="checkbox" id="bgTransparent" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span>Transparent Background</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="glass-panel controls-section">
-            <div class="section-header" onclick="toggleSection('status-info')">
-                <h3>📊 Status</h3>
-                <span class="section-toggle" id="status-info-toggle">▼</span>
-            </div>
-            <div class="section-content" id="status-info">
-                <div class="status-grid">
-                    <div class="status-item">
-                        <strong>Sources</strong>
-                        <span id="sourceCount">0</span>
-                    </div>
-                    <div class="status-item">
-                        <strong>Active Sources</strong>
-                        <span id="activeCount">0</span>
-                    </div>
-                </div>
+            <div class="tracks-list" id="tracksList">
+                <!-- Tracks will be populated by JavaScript -->
             </div>
         </div>
     </div>
+    
+    <!-- Toggle Panel Button -->
+    <button class="toggle-panel-btn" id="togglePanelBtn" title="Toggle Controls">⚙️</button>
 
+    <script src="/spatial-mixer/interactive-audio-hover/interactive-audio-hover.js"></script>
     <script>
-        // Settings panel toggle
-        function toggleSettingsPanel() {
-            const panel = document.getElementById('settingsPanel');
-            const toggle = document.getElementById('settingsToggle');
-            const toggleText = document.getElementById('settingsToggleText');
-            
-            panel.classList.toggle('open');
-            if (panel.classList.contains('open')) {
-                toggleText.textContent = 'Close';
-            } else {
-                toggleText.textContent = 'Settings';
+        // Helper function to get base URL (directory of current file)
+        function getBaseUrl() {
+            const path = window.location.pathname;
+            const lastSlash = path.lastIndexOf('/');
+            if (lastSlash === -1) {
+                return window.location.origin + '/';
             }
+            return window.location.origin + path.substring(0, lastSlash + 1);
         }
 
-        // Collapsible sections
-        function toggleSection(sectionId) {
-            const content = document.getElementById(sectionId);
-            const toggle = document.getElementById(sectionId + '-toggle');
-            if (content && toggle) {
-                content.classList.toggle('collapsed');
-                toggle.classList.toggle('collapsed');
-            }
-        }
-    </script>
-    <script src="interactive-audio-hover.js"></script>
-    <script>
-        let loadedConfig = null;
-        let audioFilesForImport = [];
-
-        // Setup background color picker (called after audioHover is initialized)
-        function setupBackgroundColorPicker() {
-            if (!window.audioHover) {
-                console.warn('⚠️ Cannot setup background color picker: audioHover not initialized');
-                return;
-            }
-            
-            const bgColorPicker = document.getElementById('backgroundColor');
-            const resetBgColorBtn = document.getElementById('resetBgColorBtn');
-            const bgTransparentCheckbox = document.getElementById('bgTransparent');
-            
-            // Function to update background (gets fresh element references)
-            function updateBackground() {
-                if (!window.audioHover) return;
-                
-                const checkbox = document.getElementById('bgTransparent');
-                const picker = document.getElementById('backgroundColor');
-                
-                if (checkbox && checkbox.checked) {
-                    window.audioHover.backgroundColor = 'transparent';
-                    window.audioHover.backgroundTransparent = true;
-                    console.log('✓ Background set to transparent');
-                } else {
-                    const color = picker ? picker.value : '#000000';
-                    window.audioHover.backgroundColor = color;
-                    window.audioHover.backgroundTransparent = false;
-                    console.log(`✓ Background color changed to ${color}`);
-                }
-                window.audioHover.draw(); // Redraw with new background
-            }
-            
-            if (bgColorPicker) {
-                // Set initial value - if transparent, show a default color in picker but keep transparent
-                const initialColor = window.audioHover.backgroundColor === 'transparent' ? '#000000' : (window.audioHover.backgroundColor || '#000000');
-                bgColorPicker.value = initialColor;
-                
-                // Remove any existing listeners by cloning
-                const newPicker = bgColorPicker.cloneNode(true);
-                newPicker.value = initialColor;
-                bgColorPicker.parentNode.replaceChild(newPicker, bgColorPicker);
-                
-                // Add event listener for color picker
-                newPicker.addEventListener('input', (e) => {
-                    const checkbox = document.getElementById('bgTransparent');
-                    if (checkbox) {
-                        checkbox.checked = false; // Uncheck transparent when color is changed
-                    }
-                    updateBackground();
-                });
-                console.log('✓ Background color picker initialized');
-            }
-            
-            if (bgTransparentCheckbox) {
-                // Set initial state
-                bgTransparentCheckbox.checked = window.audioHover.backgroundTransparent || false;
-                
-                // Remove any existing listeners by cloning
-                const newCheckbox = bgTransparentCheckbox.cloneNode(true);
-                newCheckbox.checked = window.audioHover.backgroundTransparent || false;
-                bgTransparentCheckbox.parentNode.replaceChild(newCheckbox, bgTransparentCheckbox);
-                
-                // Add event listener for transparency checkbox
-                newCheckbox.addEventListener('change', (e) => {
-                    updateBackground();
-                });
-                console.log('✓ Background transparency checkbox initialized');
-            }
-            
-            if (resetBgColorBtn) {
-                // Remove any existing listeners by cloning
-                const newBtn = resetBgColorBtn.cloneNode(true);
-                resetBgColorBtn.parentNode.replaceChild(newBtn, resetBgColorBtn);
-                
-                newBtn.addEventListener('click', () => {
-                    if (window.audioHover) {
-                        window.audioHover.backgroundColor = '#000000';
-                        window.audioHover.backgroundTransparent = false;
-                        const picker = document.getElementById('backgroundColor');
-                        const checkbox = document.getElementById('bgTransparent');
-                        if (picker) {
-                            picker.value = '#000000';
-                        }
-                        if (checkbox) {
-                            checkbox.checked = false;
-                        }
-                        window.audioHover.draw(); // Redraw with default background
-                        console.log('✓ Background color reset to black');
-                    }
-                });
-                console.log('✓ Background reset button initialized');
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            // Hide loading overlay immediately - we'll auto-load
-            const loadOverlay = document.getElementById('loadOverlay');
-            const audioCanvas = document.getElementById('audioCanvas');
-            const settingsToggle = document.getElementById('settingsToggle');
-            const settingsPanel = document.getElementById('settingsPanel');
-            
-            // Check if we're using file:// protocol BEFORE hiding overlay
-            const isLocalFile = window.location.protocol === 'file:';
-            
-            // If using file://, keep overlay visible (will show load instructions)
-            // If using http/https, hide overlay (will auto-load)
-            if (isLocalFile) {
-                // Keep overlay visible for file:// protocol
-                loadOverlay.classList.remove('hidden');
-                loadOverlay.style.display = 'flex';
-                console.log('📋 File:// protocol detected - keeping overlay visible');
-            } else {
-                // Hide overlay for web servers (will auto-load)
-                loadOverlay.classList.add('hidden');
-                console.log('🌐 Web server detected - hiding overlay for auto-load');
-            }
-            
-            if (audioCanvas) {
-                audioCanvas.classList.remove('hidden');
-                console.log('✓ Canvas element shown');
-            }
-            if (settingsToggle) {
-                settingsToggle.classList.remove('hidden');
-                console.log('✓ Settings toggle shown');
-            }
-            if (settingsPanel) {
-                settingsPanel.classList.remove('hidden');
-                console.log('✓ Settings panel shown');
-            }
-            
-            // Check for URL parameter (for embedding with config URL or filename)
-            const urlParams = new URLSearchParams(window.location.search);
-            let configUrl = urlParams.get('config');
-            
-            // Helper function to get base URL (directory of current file)
-            function getBaseUrl() {
-                const path = window.location.pathname;
-                const lastSlash = path.lastIndexOf('/');
-                if (lastSlash === -1) {
-                    return window.location.origin + '/';
-                }
-                return window.location.origin + path.substring(0, lastSlash + 1);
-            }
-            
-            // If config parameter is provided but not a full URL, assume it's a filename on same domain
-            if (configUrl && !configUrl.startsWith('http://') && !configUrl.startsWith('https://')) {
-                // It's just a filename, construct full URL from current domain
-                const baseUrl = getBaseUrl();
-                configUrl = baseUrl + configUrl;
-                console.log('📝 Config parameter detected, constructed URL:', configUrl);
-            }
-            
-            // If no config parameter, try to load default config.json from same directory
-            if (!configUrl) {
-                const baseUrl = getBaseUrl();
-                configUrl = baseUrl + 'config.json';
-                console.log('📝 No config parameter, using default:', configUrl);
-            }
-            
-            console.log('🌐 Current page URL:', window.location.href);
-            console.log('📁 Base directory URL:', getBaseUrl());
-            console.log('🎯 Final config URL:', configUrl);
-            
-            // isLocalFile already declared above, reuse it
-            
-            // Auto-load config (either from parameter or default)
-            if (configUrl) {
-                console.log('🎯 Auto-loading config from:', configUrl);
-                
-                // If running from file://, we can't use fetch - show manual load option
-                if (isLocalFile && configUrl.startsWith('file://')) {
-                    console.warn('⚠️ Cannot load config from file:// protocol due to CORS restrictions');
-                    const loadOverlay = document.getElementById('loadOverlay');
-                    if (loadOverlay) {
-                        // Make sure overlay is visible - force all display properties
-                        loadOverlay.classList.remove('hidden');
-                        loadOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 1000; display: flex !important; flex-direction: column; align-items: center; justify-content: center; padding: 20px; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important;';
-                        console.log('✓ Overlay forced to be visible');
-                        const loadContent = loadOverlay.querySelector('.load-content');
-                        if (loadContent) {
-                            // Remove any existing error messages
-                            const existingErrors = loadContent.querySelectorAll('[data-local-file-error]');
-                            existingErrors.forEach(el => el.remove());
-                            
-                            const errorDiv = document.createElement('div');
-                            errorDiv.setAttribute('data-local-file-error', 'true');
-                            errorDiv.style.cssText = 'background: rgba(255, 152, 0, 0.2); padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid rgba(255, 152, 0, 0.5);';
-                            errorDiv.innerHTML = `
-                                <strong style="color: #FF9800;">⚠️ Auto-Load Not Available</strong><br>
-                                <p style="margin: 10px 0; font-size: 0.9rem;">
-                                    Browsers block loading files when opening directly from your computer. 
-                                    <strong>Click "📂 Load Config File" below</strong> and select <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">config.json</code> from this folder, then click "📥 Load Configuration".
-                                </p>
-                                <p style="margin: 10px 0; font-size: 0.85rem; opacity: 0.9;">
-                                    <strong>💡 For true auto-loading:</strong> Use a local web server:<br>
-                                    <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; display: block; margin: 5px 0;">python -m http.server 8000</code>
-                                    Then open: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">http://localhost:8000/player.html</code>
-                                </p>
-                            `;
-                            loadContent.appendChild(errorDiv);
-                        }
-                    }
-                } else {
-                    try {
-                        // Silently load configuration (no loading screen)
-                    await loadConfigFromUrl(configUrl);
-                        console.log('✅ Auto-load completed successfully');
-                } catch (error) {
-                        // Show detailed error information
-                        console.error('❌ Auto-load failed:', error);
-                        console.error('Failed URL:', configUrl);
-                        console.error('Current location:', window.location.href);
-                        
-                        // Show error message to user
-                    const statusEl = document.getElementById('loadStatus');
-                        if (statusEl) {
-                    statusEl.textContent = '✗ Error loading config: ' + error.message;
-                    statusEl.style.color = '#f44336';
-                    statusEl.style.display = 'block';
-                        }
-                        
-                        // Also show overlay with error message
-                        const loadOverlay = document.getElementById('loadOverlay');
-                        if (loadOverlay) {
-                            loadOverlay.classList.remove('hidden');
-                            const loadContent = loadOverlay.querySelector('.load-content');
-                            if (loadContent) {
-                                // Remove any existing error messages
-                                const existingErrors = loadContent.querySelectorAll('[data-load-error]');
-                                existingErrors.forEach(el => el.remove());
-                                
-                                const errorDiv = document.createElement('div');
-                                errorDiv.setAttribute('data-load-error', 'true');
-                                errorDiv.style.cssText = 'background: rgba(244, 67, 54, 0.2); padding: 15px; border-radius: 8px; margin-top: 15px;';
-                                errorDiv.innerHTML = `
-                                    <strong style="color: #f44336;">⚠️ Failed to load config</strong><br>
-                                    <small>URL: ${configUrl}</small><br>
-                                    <small>Error: ${error.message}</small><br>
-                                    <small>Check browser console for details</small>
-                                `;
-                                loadContent.appendChild(errorDiv);
-                            }
-                        }
-                    }
-                }
-            } else {
-                console.warn('⚠️ No config URL specified - player will start empty');
-            }
-
-            // File input handlers (for manual loading if no URL parameter)
-            const configFileInput = document.getElementById('configFileInput');
-            if (configFileInput) {
-                configFileInput.addEventListener('change', async (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-
-                    try {
-                        console.log('📂 Loading config file:', file.name);
-                        const text = await file.text();
-                        loadedConfig = JSON.parse(text);
-                        console.log('✓ Config parsed:', {
-                            hasSettings: !!loadedConfig.settings,
-                            sourcesCount: loadedConfig.sources?.length || 0,
-                            isArray: Array.isArray(loadedConfig)
-                        });
-                        
-                        const statusEl = document.getElementById('loadStatus');
-                        if (statusEl) {
-                            statusEl.textContent = `✓ Config loaded: ${loadedConfig.sources?.length || 0} sources`;
-                            statusEl.style.color = '#4CAF50';
-                            statusEl.style.display = 'block';
-                        }
-                    } catch (error) {
-                        console.error('❌ Error loading config file:', error);
-                        const statusEl = document.getElementById('loadStatus');
-                        if (statusEl) {
-                            statusEl.textContent = '✗ Error loading config: ' + error.message;
-                            statusEl.style.color = '#f44336';
-                            statusEl.style.display = 'block';
-                        }
-                        loadedConfig = null;
-                    }
-                });
-            }
-
-            document.getElementById('audioFilesInput').addEventListener('change', (e) => {
-                audioFilesForImport = Array.from(e.target.files);
-                const statusEl = document.getElementById('loadStatus');
-                statusEl.textContent = `✓ ${audioFilesForImport.length} audio file(s) ready`;
-                statusEl.style.color = '#4CAF50';
-                statusEl.style.display = 'block';
-            });
-
-            const loadConfigBtn = document.getElementById('loadConfigBtn');
-            if (loadConfigBtn) {
-                loadConfigBtn.addEventListener('click', async () => {
-                    if (!loadedConfig) {
-                        const statusEl = document.getElementById('loadStatus');
-                        if (statusEl) {
-                            statusEl.textContent = '✗ Please load a configuration file first';
-                            statusEl.style.color = '#f44336';
-                            statusEl.style.display = 'block';
-                        }
-                        return;
-                    }
-
-                    console.log('🔄 Loading configuration from file...');
-                    try {
-                        await loadConfiguration(loadedConfig, audioFilesForImport.length > 0 ? audioFilesForImport : null);
-                        console.log('✅ Configuration loaded successfully from file');
-                    } catch (error) {
-                        console.error('❌ Error loading configuration:', error);
-                        const statusEl = document.getElementById('loadStatus');
-                        if (statusEl) {
-                            statusEl.textContent = '✗ Error loading configuration: ' + error.message;
-                            statusEl.style.color = '#f44336';
-                            statusEl.style.display = 'block';
-                        }
-                    }
-                });
-            }
-        });
-
-        async function loadConfigFromUrl(url) {
-            try {
-                // Log the exact URL being fetched
-                console.log('🔍 Attempting to load config from:', url);
-                
-                const response = await fetch(url);
-                if (!response.ok) {
-                    const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
-                    console.error('❌ Fetch failed:', errorMsg);
-                    console.error('Response URL:', response.url);
-                    throw new Error(`Failed to fetch config: ${errorMsg}`);
-                }
-                
-                const contentType = response.headers.get('content-type');
-                console.log('📄 Content-Type:', contentType);
-                
-                let config = await response.json();
-                console.log('✓ Config JSON parsed successfully');
-                console.log('📊 Config structure:', {
-                    hasVersion: !!config.version,
-                    hasSettings: !!config.settings,
-                    sourcesCount: config.sources?.length || (Array.isArray(config) ? config.length : 0),
-                    isArray: Array.isArray(config)
-                });
-                
-                // Check if it's a simple array format (like london-tube-lines.json)
-                // If so, convert it to the full config format
-                if (Array.isArray(config) && config.length > 0 && config[0].url) {
-                    console.log('🔄 Detected simple array format, converting to full config...');
-                    config = convertSimpleArrayToConfig(config);
-                }
-                
-                console.log('🚀 Loading configuration into player...');
-                try {
-                    await loadConfiguration(config, null);
-                    console.log('✅ Config loaded and initialized successfully');
-                } catch (configError) {
-                    console.error('❌ Error in loadConfiguration:', configError);
-                    throw configError; // Re-throw to be caught by outer handler
-                }
-            } catch (error) {
-                console.error('❌ Error loading config from URL:', error);
-                console.error('Error details:', {
-                    message: error.message,
-                    stack: error.stack,
-                    name: error.name
-                });
-                // Re-throw so caller can handle it
-                throw error;
-            }
-        }
-
-        // Convert simple array format (like london-tube-lines.json) to full config format
+        // Convert simple array format to full config format
         function convertSimpleArrayToConfig(simpleArray) {
             const canvasWidth = window.innerWidth;
             const canvasHeight = window.innerHeight;
@@ -988,7 +361,7 @@
                 version: '1.0',
                 sources: sources,
                 settings: {
-                    masterVolume: 0.5,
+                    masterVolume: 1.0,
                     fadeRadius: 500,
                     fadeSpeed: 0.5,
                     physicsEnabled: true,
@@ -1001,16 +374,41 @@
                     spatialAudioEnabled: true,
                     spatialAudioStrength: 1.0,
                     reverbEnabled: true,
-                    reverbAmount: 1.0
+                    reverbAmount: 0.3
                 }
             };
         }
 
-        async function loadConfiguration(config, audioFiles) {
+        async function loadConfigFromUrl(url) {
+            try {
+                console.log('🔍 Loading config from:', url);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                let config = await response.json();
+                console.log('✓ Config JSON parsed successfully');
+                
+                // Check if it's a simple array format
+                if (Array.isArray(config) && config.length > 0 && config[0].url) {
+                    console.log('🔄 Detected simple array format, converting...');
+                    config = convertSimpleArrayToConfig(config);
+                }
+                
+                return config;
+            } catch (error) {
+                console.error('❌ Error loading config from URL:', error);
+                throw error;
+            }
+        }
+
+        async function loadConfiguration(config) {
             try {
                 console.log('🔧 Initializing audio hover system...');
 
-                // Initialize audio hover (constructor doesn't auto-init anymore)
+                // Initialize audio hover
                 window.audioHover = new InteractiveAudioHover();
                 console.log('✓ InteractiveAudioHover instance created');
                 
@@ -1022,27 +420,21 @@
                 const canvas = document.getElementById('audioCanvas');
                 if (canvas && window.audioHover.canvas) {
                     console.log('✓ Canvas element found and initialized');
-                    console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
                     // Ensure background is transparent
                     window.audioHover.backgroundColor = 'transparent';
                     window.audioHover.backgroundTransparent = true;
-                    // Force initial draw to show background immediately
+                    // Force initial draw
                     window.audioHover.draw();
                     console.log('✓ Canvas drawn with transparent background');
-                } else {
-                    console.error('❌ Canvas element not found or not initialized!');
                 }
                 
-                // Verify animation loop started
-                console.log(`✓ AudioHover initialized. Animation loop ID: ${window.audioHover.animationFrameId}`);
-                
-                // Set default volume for player to 50%
-                window.audioHover.masterVolume = 0.5;
+                // Set default volume for embedded player (100%)
+                window.audioHover.masterVolume = 1.0;
                 if (window.audioHover.masterGainNode) {
-                    window.audioHover.masterGainNode.gain.value = 0.5;
+                    window.audioHover.masterGainNode.gain.value = 1.0;
                 }
                 
-                // Force enable physics before import (will be overridden by config if present)
+                // Force enable physics
                 window.audioHover.physicsEnabled = true;
                 window.audioHover.physicsStrength = 1.0;
                 window.audioHover.orbitalStrength = 1.0;
@@ -1050,180 +442,331 @@
                 
                 // Import configuration
                 console.log('📥 Importing configuration...');
-                await window.audioHover.importConfiguration(config, audioFiles);
+                await window.audioHover.importConfiguration(config, null);
                 console.log(`✓ Configuration imported. Sources loaded: ${window.audioHover.sources.length}`);
+                
+                // Hide loading indicator immediately after sources are loaded
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                if (loadingIndicator && window.audioHover.sources.length > 0) {
+                    loadingIndicator.classList.remove('visible');
+                    setTimeout(() => {
+                        loadingIndicator.classList.add('hidden');
+                    }, 300);
+                    console.log('✓ Loading indicator hidden');
+                }
                 
                 // Force a redraw after import
                 if (window.audioHover.sources.length > 0) {
                     window.audioHover.draw();
                     console.log('✓ Canvas redrawn with sources');
-                } else {
-                    console.warn('⚠️ No sources loaded from configuration!');
                 }
                 
-                // Apply default volume (50%) after import (config might set it to 100%)
-                // Use 50% as default for player
-                const importedVolume = config.settings?.masterVolume ?? 1.0;
-                window.audioHover.masterVolume = 0.5; // Set to 50% for player
+                // Apply default volume (100%) after import
+                window.audioHover.masterVolume = 1.0;
                 if (window.audioHover.masterGainNode) {
-                    window.audioHover.masterGainNode.gain.value = 0.5;
+                    window.audioHover.masterGainNode.gain.value = 1.0;
                 }
                 
                 // Reduce reverb amount to prevent distortion
                 if (window.audioHover.reverbAmount > 0.3) {
                     window.audioHover.reverbAmount = 0.3;
-                    console.log(`✓ Reverb amount reduced to 30% to prevent distortion`);
                 }
                 
-                // Update reverb send gain if it exists
                 if (window.audioHover.reverbSendGain) {
                     window.audioHover.reverbSendGain.gain.value = window.audioHover.reverbAmount * 0.25;
                 }
                 
-                // Update UI if volume slider exists
-                const volumeSlider = document.getElementById('masterVolume');
-                if (volumeSlider) {
-                    volumeSlider.value = window.audioHover.masterVolume * 100;
-                    const volumeValue = document.getElementById('masterVolumeValue');
-                    if (volumeValue) {
-                        volumeValue.textContent = Math.round(window.audioHover.masterVolume * 100) + '%';
-                    }
-                    
-                    // Add event listener for volume slider
-                    volumeSlider.addEventListener('input', (e) => {
-                        const volume = parseFloat(e.target.value) / 100;
-                        window.audioHover.masterVolume = volume;
-                        if (window.audioHover.masterGainNode) {
-                            window.audioHover.masterGainNode.gain.value = volume;
-                        }
-                        if (volumeValue) {
-                            volumeValue.textContent = Math.round(volume * 100) + '%';
-                        }
-                        console.log(`✓ Master volume changed to ${Math.round(volume * 100)}%`);
-                    });
-                }
-                
-                // Background color picker - set up after audioHover is initialized
-                setupBackgroundColorPicker();
-                
-                console.log(`✓ Volume set to ${Math.round(window.audioHover.masterVolume * 100)}% for player (reduced to prevent distortion)`);
-                
-                // Force ensure physics are enabled after import
+                // Ensure physics are enabled
                 if (!window.audioHover.physicsEnabled) {
-                    console.warn(`⚠️ Physics disabled after import! Force enabling...`);
                     window.audioHover.physicsEnabled = true;
                 }
                 if (window.audioHover.physicsStrength === 0) {
-                    console.warn(`⚠️ Physics strength is 0! Setting to 1.0...`);
                     window.audioHover.physicsStrength = 1.0;
                 }
                 
                 // Ensure animation loop is running
                 if (window.audioHover.animationFrameId === null) {
-                    console.warn(`⚠️ Animation loop stopped! Restarting...`);
                     window.audioHover.startAnimationLoop();
                 }
                 
-                // Ensure overlay stays hidden and canvas/controls are visible
-                const loadOverlay = document.getElementById('loadOverlay');
-                if (loadOverlay) {
-                    loadOverlay.classList.add('hidden');
-                }
-                const audioCanvas = document.getElementById('audioCanvas');
-                const settingsToggle = document.getElementById('settingsToggle');
-                const settingsPanel = document.getElementById('settingsPanel');
-                if (audioCanvas) audioCanvas.classList.remove('hidden');
-                if (settingsToggle) settingsToggle.classList.remove('hidden');
-                if (settingsPanel) settingsPanel.classList.remove('hidden');
+                console.log('✓ Configuration loaded successfully');
+                return true;
+            } catch (error) {
+                console.error('Error loading configuration:', error);
+                throw error;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            // Show loading indicator
+            loadingIndicator.classList.add('visible');
+            
+            // Determine config URL
+            const urlParams = new URLSearchParams(window.location.search);
+            let configUrl = urlParams.get('config');
+            
+            // If no config parameter, use default config.json
+            if (!configUrl) {
+                const baseUrl = getBaseUrl();
+                configUrl = baseUrl + 'config.json';
+            } else if (!configUrl.startsWith('http://') && !configUrl.startsWith('https://')) {
+                // Relative path - construct full URL
+                const baseUrl = getBaseUrl();
+                configUrl = baseUrl + configUrl;
+            }
+            
+            console.log('🎯 Loading config from:', configUrl);
+            
+            try {
+                // Load config
+                const config = await loadConfigFromUrl(configUrl);
                 
-                // Set up play/stop button listeners
-                const playBtn = document.getElementById('playBtn');
-                const stopBtn = document.getElementById('stopBtn');
-                if (playBtn) {
-                    playBtn.addEventListener('click', async () => {
-                        if (window.audioHover) {
-                            // Resume audio context if suspended (required for autoplay)
+                // Load configuration into player
+                await loadConfiguration(config);
+                
+                // Initialize volume controls after sources are loaded
+                if (window.audioHover && window.audioHover.sources.length > 0) {
+                    initializeVolumeControls();
+                    updateTracksList();
+                }
+                
+                // Attempt auto-play immediately (may require user interaction due to browser policies)
+                if (window.audioHover && window.audioHover.sources.length > 0) {
+                    console.log(`✓ ${window.audioHover.sources.length} sources ready for playback`);
+                    
+                    // Try to resume and play immediately
+                    const attemptAutoPlay = async () => {
+                        try {
+                            // Resume audio context if suspended
                             if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
                                 try {
                                     await window.audioHover.audioContext.resume();
-                                    console.log('✓ Audio context resumed on play');
+                                    console.log('✓ Audio context resumed');
                                 } catch (resumeError) {
-                                    console.warn('⚠️ Could not resume audio context:', resumeError);
+                                    console.warn('⚠️ Could not resume audio context (will resume on interaction):', resumeError);
                                 }
                             }
-                            window.audioHover.playAll();
-                            console.log('✓ Play button clicked');
-                        }
-                    });
-                }
-                if (stopBtn) {
-                    stopBtn.addEventListener('click', () => {
-                        if (window.audioHover) {
-                            window.audioHover.stopAll();
-                            console.log('✓ Stop button clicked');
-                        }
-                    });
-                }
-                
-                // Also resume audio context on any canvas click (for autoplay policy)
-                const audioCanvasForResume = document.getElementById('audioCanvas');
-                if (audioCanvasForResume) {
-                    const resumeOnClick = async () => {
-                        if (window.audioHover && window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
-                            try {
-                                await window.audioHover.audioContext.resume();
-                                console.log('✓ Audio context resumed on canvas click');
-                                audioCanvasForResume.removeEventListener('click', resumeOnClick); // Only need to do this once
-                            } catch (resumeError) {
-                                console.warn('⚠️ Could not resume audio context:', resumeError);
+                            
+                            // Start playback if context is running
+                            if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'running') {
+                                window.audioHover.playAll();
+                                console.log('✓ Auto-play started');
+                            } else {
+                                console.log('⏸️ Audio context suspended - will start on user interaction');
                             }
+                        } catch (error) {
+                            console.warn('⚠️ Auto-play failed:', error);
                         }
                     };
-                    audioCanvasForResume.addEventListener('click', resumeOnClick, { once: true });
-                }
-                
-                // Update mouse position display periodically
-                setInterval(() => {
-                    if (window.audioHover) {
-                        window.audioHover.updateMousePos();
-                        window.audioHover.updateSourceInfo();
-                    }
-                }, 100);
-
-                // Verify physics are enabled and animation loop is running
-                console.log(`✓ Player loaded:`);
-                console.log(`   Physics enabled: ${window.audioHover.physicsEnabled}`);
-                console.log(`   Physics strength: ${window.audioHover.physicsStrength}`);
-                console.log(`   Orbital strength: ${window.audioHover.orbitalStrength}`);
-                console.log(`   Sources: ${window.audioHover.sources.length}`);
-                console.log(`   Animation loop running: ${window.audioHover.animationFrameId !== null}`);
-                
-                // Auto-play if sources are loaded (for embedded players)
-                if (window.audioHover.sources.length > 0) {
-                    setTimeout(() => {
-                        window.audioHover.playAll();
-                        console.log(`✓ Playback started automatically`);
-                    }, 500);
+                    
+                    // Try immediately
+                    attemptAutoPlay();
+                    
+                    // Also try after a short delay (sometimes helps)
+                    setTimeout(attemptAutoPlay, 100);
                 } else {
-                    console.warn(`⚠ No sources loaded!`);
+                    console.warn('⚠️ No sources loaded - cannot auto-play');
                 }
                 
-                // Hide any remaining status messages after a short delay
-                setTimeout(() => {
-                    const statusEl = document.getElementById('loadStatus');
-                    if (statusEl && window.audioHover.sources.length > 0) {
-                        statusEl.style.display = 'none';
+                // Resume audio context and start playback on any user interaction (for autoplay policy)
+                const resumeOnInteraction = async () => {
+                    if (window.audioHover && window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                        try {
+                            await window.audioHover.audioContext.resume();
+                            console.log('✓ Audio context resumed on user interaction');
+                            if (!window.audioHover.isPlaying) {
+                                window.audioHover.playAll();
+                                console.log('✓ Playback started on user interaction');
+                            }
+                        } catch (resumeError) {
+                            console.warn('⚠️ Could not resume audio context:', resumeError);
+                        }
                     }
-                }, 2000);
-
-                // Success - no status messages needed (silent load)
-                console.log('✓ Configuration loaded successfully');
+                };
+                
+                // Listen for user interactions (but don't limit to once - allow multiple attempts)
+                document.addEventListener('click', resumeOnInteraction);
+                document.addEventListener('touchstart', resumeOnInteraction);
+                document.addEventListener('keydown', resumeOnInteraction);
+                document.addEventListener('mousemove', resumeOnInteraction, { once: true }); // Also try on first mouse move
+                
             } catch (error) {
-                console.error('Error loading configuration:', error);
-                // Don't show overlay on error - just log it
-                throw error; // Re-throw for caller to handle
+                console.error('❌ Failed to load configuration:', error);
+                loadingIndicator.textContent = 'Failed to load audio experience';
+                loadingIndicator.style.color = '#f44336';
+                // Keep loading indicator visible to show error
+            }
+        });
+
+        // Initialize mute functionality for sources
+        function initializeMuteFunctionality() {
+            if (!window.audioHover) return;
+            
+            // Add mute methods to InteractiveAudioHover prototype
+            if (!window.audioHover.muteSource) {
+                window.audioHover.muteSource = function(sourceId) {
+                    const source = this.sources.find(s => s.id === sourceId);
+                    if (!source) return;
+                    
+                    // Initialize isMuted if not exists
+                    if (source.isMuted === undefined) {
+                        source.isMuted = false;
+                    }
+                    
+                    source.isMuted = true;
+                    
+                    // Immediately set volume to 0
+                    if (source.gainNode) {
+                        const currentTime = this.audioContext.currentTime;
+                        source.gainNode.gain.cancelScheduledValues(currentTime);
+                        source.gainNode.gain.setValueAtTime(source.gainNode.gain.value, currentTime);
+                        source.gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.1);
+                    }
+                    
+                    console.log(`🔇 Muted track: ${source.name || source.editableTitle}`);
+                };
+            }
+            
+            if (!window.audioHover.unmuteSource) {
+                window.audioHover.unmuteSource = function(sourceId) {
+                    const source = this.sources.find(s => s.id === sourceId);
+                    if (!source || !source.isMuted) return;
+                    
+                    source.isMuted = false;
+                    
+                    // Volume will be restored by the updateAudioVolumes loop based on proximity
+                    // No need to manually restore - the animation loop will handle it
+                    
+                    console.log(`🔊 Unmuted track: ${source.name || source.editableTitle}`);
+                };
+            }
+            
+            if (!window.audioHover.toggleMuteSource) {
+                window.audioHover.toggleMuteSource = function(sourceId) {
+                    const source = this.sources.find(s => s.id === sourceId);
+                    if (!source) return;
+                    
+                    if (source.isMuted) {
+                        this.unmuteSource(sourceId);
+                    } else {
+                        this.muteSource(sourceId);
+                    }
+                };
+            }
+            
+            // Override updateAudioVolumes to respect mute state
+            const originalUpdateAudioVolumes = window.audioHover.updateAudioVolumes;
+            if (originalUpdateAudioVolumes) {
+                window.audioHover.updateAudioVolumes = function() {
+                    // Call original update
+                    originalUpdateAudioVolumes.call(this);
+                    
+                    // Apply mute state to all sources after volume calculation
+                    this.sources.forEach(source => {
+                        if (source.isMuted && source.gainNode) {
+                            const currentTime = this.audioContext.currentTime;
+                            const currentGain = source.gainNode.gain.value;
+                            // Force volume to 0 if muted
+                            source.gainNode.gain.cancelScheduledValues(currentTime);
+                            source.gainNode.gain.setValueAtTime(currentGain, currentTime);
+                            source.gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.1);
+                        }
+                    });
+                };
             }
         }
+
+        // Initialize volume controls
+        function initializeVolumeControls() {
+            const controlPanel = document.getElementById('controlPanel');
+            const toggleBtn = document.getElementById('togglePanelBtn');
+            const masterVolumeSlider = document.getElementById('masterVolumeSlider');
+            const masterVolumeValue = document.getElementById('masterVolumeValue');
+            
+            // Toggle panel visibility
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => {
+                    controlPanel.classList.toggle('hidden');
+                });
+            }
+            
+            // Master volume control
+            if (masterVolumeSlider && window.audioHover) {
+                // Set initial value
+                masterVolumeSlider.value = window.audioHover.masterVolume * 100;
+                masterVolumeValue.textContent = Math.round(window.audioHover.masterVolume * 100) + '%';
+                
+                masterVolumeSlider.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value) / 100;
+                    window.audioHover.masterVolume = value;
+                    if (window.audioHover.masterGainNode) {
+                        window.audioHover.masterGainNode.gain.value = value;
+                    }
+                    masterVolumeValue.textContent = e.target.value + '%';
+                });
+            }
+            
+            // Initialize mute functionality
+            initializeMuteFunctionality();
+        }
+
+        // Update tracks list in control panel
+        function updateTracksList() {
+            const tracksList = document.getElementById('tracksList');
+            if (!tracksList || !window.audioHover) return;
+            
+            tracksList.innerHTML = '';
+            
+            window.audioHover.sources.forEach(source => {
+                // Initialize isMuted if not exists
+                if (source.isMuted === undefined) {
+                    source.isMuted = false;
+                }
+                
+                const trackItem = document.createElement('div');
+                trackItem.className = 'track-item';
+                
+                const colorDot = document.createElement('div');
+                colorDot.className = 'track-color';
+                colorDot.style.backgroundColor = source.color || '#ffffff';
+                
+                const trackName = document.createElement('div');
+                trackName.className = 'track-name';
+                trackName.textContent = source.editableTitle || source.name || 'Untitled Track';
+                
+                const muteBtn = document.createElement('button');
+                muteBtn.className = 'track-mute-btn' + (source.isMuted ? ' muted' : '');
+                muteBtn.textContent = source.isMuted ? 'Unmute' : 'Mute';
+                muteBtn.addEventListener('click', () => {
+                    window.audioHover.toggleMuteSource(source.id);
+                    // Update button state after toggle
+                    const isNowMuted = source.isMuted;
+                    muteBtn.textContent = isNowMuted ? 'Unmute' : 'Mute';
+                    if (isNowMuted) {
+                        muteBtn.classList.add('muted');
+                    } else {
+                        muteBtn.classList.remove('muted');
+                    }
+                });
+                
+                trackItem.appendChild(colorDot);
+                trackItem.appendChild(trackName);
+                trackItem.appendChild(muteBtn);
+                tracksList.appendChild(trackItem);
+            });
+        }
+        
+        // Re-update tracks list when sources change (polling approach for simplicity)
+        setInterval(() => {
+            if (window.audioHover && document.getElementById('tracksList')) {
+                const currentCount = document.querySelectorAll('.track-item').length;
+                if (currentCount !== window.audioHover.sources.length) {
+                    updateTracksList();
+                }
+            }
+        }, 1000);
     </script>
 </body>
 </html>
