@@ -10,12 +10,7 @@
 
 [[redirects]]
   from = "/spatial-mixer"
-  to = "/spatial-mixer/interactive-audio-hover/player.html"
-  status = 301
-
-[[redirects]]
-  from = "/spatial-mixer/"
-  to = "/spatial-mixer/interactive-audio-hover/player.html"
+  to = "/spatial-mixer/"
   status = 301
 
 # Headers for better performance
