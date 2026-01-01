@@ -285,6 +285,24 @@
     <div class="control-panel hidden" id="controlPanel">
         <div class="control-panel-header">Audio Controls</div>
         
+        <!-- Load Config Section -->
+        <div class="control-group" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 15px;">
+            <div class="control-label">
+                <span class="control-label-text">Load Configuration</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <input type="file" id="configFileInput" accept=".json" style="display: none;">
+                <label for="configFileInput" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; text-align: center; transition: background 0.2s;">
+                    📂 Load from File
+                </label>
+                <input type="text" id="configUrlInput" placeholder="Enter config URL..." style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-size: 12px; font-family: inherit;">
+                <button id="loadConfigUrlBtn" style="background: rgba(33, 150, 243, 0.3); border: 1px solid rgba(33, 150, 243, 0.5); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; color: rgba(255,255,255,0.9); transition: all 0.2s;">
+                    🔗 Load from URL
+                </button>
+            </div>
+            <div id="configLoadStatus" style="margin-top: 8px; font-size: 11px; opacity: 0.7; display: none;"></div>
+        </div>
+        
         <!-- Master Volume Control -->
         <div class="control-group">
             <div class="control-label">
