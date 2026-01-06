@@ -6,6 +6,7 @@
   <title>JnfH Soundmap Builder</title>
   
   <link rel="stylesheet" href="css/player.css">
+  <link rel="stylesheet" href="../css/universal-timeline.css">
 </head>
 <body>
   <div id="app">
@@ -181,6 +182,10 @@
     </div>
   </div>
   
+  <!-- Timeline Container -->
+  <div id="timeline-container"></div>
+  
+  <script src="../js/universal-timeline.js"></script>
   <script src="js/soundmap-builder.js"></script>
   
   <script>
@@ -196,6 +201,31 @@
     window.addEventListener('DOMContentLoaded', async () => {
       builder = new SpatialAudioBuilder('canvas', defaultConfig);
       await builder.init();
+      
+      // Initialize Universal Timeline
+      if (typeof UniversalTimeline !== 'undefined') {
+        try {
+          window.timeline = new UniversalTimeline();
+          const container = document.getElementById('timeline-container');
+          if (container) {
+            window.timeline.createUI('timeline-container');
+            
+            // Register builder with timeline
+            if (builder && typeof builder.getCurrentTime === 'function') {
+              window.timeline.registerPlayer('soundmap-builder', builder);
+              console.log('✓ Timeline initialized and builder registered');
+            } else {
+              console.warn('Builder not ready for timeline registration');
+            }
+          } else {
+            console.error('Timeline container not found');
+          }
+        } catch (error) {
+          console.error('Error initializing timeline:', error);
+        }
+      } else {
+        console.error('UniversalTimeline not loaded');
+      }
     });
   </script>
 </body>

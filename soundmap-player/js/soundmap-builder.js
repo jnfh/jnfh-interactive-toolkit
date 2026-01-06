@@ -62,6 +62,10 @@ class SpatialAudioBuilder {
     this.imageOpacity = 0.5;
     this.showGrid = true;
     this.showImage = true;
+    
+    // Timeline integration
+    this.playbackStartTime = 0; // Audio context time when playback started
+    this.pauseTime = 0; // Time position when paused
   }
   
   async init() {
@@ -2005,12 +2009,16 @@ class SpatialAudioBuilder {
     await this.loadNewAudioBuffers();
     
     this.isPlaying = true;
-    document.getElementById('play-btn').textContent = 'Stop Preview';
-    document.getElementById('status').classList.remove('status-hidden');
+    this.playbackStartTime = this.audioContext.currentTime - this.pauseTime;
+    
+    const playBtn = document.getElementById('play-btn');
+    if (playBtn) playBtn.textContent = 'Stop Preview';
+    const statusEl = document.getElementById('status');
+    if (statusEl) statusEl.classList.remove('status-hidden');
     
     // Start all audio sources
     this.audioZones.forEach((zone) => {
-      this.startAudioSource(zone);
+      this.startAudioSource(zone, this.pauseTime);
     });
     
     // Initialize target volumes
@@ -2027,7 +2035,10 @@ class SpatialAudioBuilder {
   
   stopPreview() {
     this.isPlaying = false;
-    document.getElementById('play-btn').textContent = 'Preview';
+    this.pauseTime = this.getCurrentTime();
+    
+    const playBtn = document.getElementById('play-btn');
+    if (playBtn) playBtn.textContent = 'Preview';
     
     this.stopAnimationLoop();
     
@@ -2355,13 +2366,72 @@ class SpatialAudioBuilder {
     }
   }
   
-  startAudioSource(zone) {
+  startAudioSource(zone, offset = 0) {
     const source = this.audioContext.createBufferSource();
     source.buffer = zone.audioBuffer;
     source.loop = zone.audio.loop;
     source.connect(zone.panner);
-    source.start(0);
+    // Use modulo to handle looping audio correctly
+    const startOffset = zone.audio.loop 
+      ? offset % zone.audioBuffer.duration 
+      : Math.min(offset, zone.audioBuffer.duration);
+    source.start(0, startOffset);
     zone.source = source;
+  }
+  
+  // Timeline integration methods
+  play() {
+    if (!this.isPlaying) {
+      this.startPreview();
+    }
+  }
+  
+  pause() {
+    if (this.isPlaying) {
+      this.stopPreview();
+    }
+  }
+  
+  stop() {
+    this.pause();
+    this.pauseTime = 0;
+    this.seek(0);
+  }
+  
+  getCurrentTime() {
+    if (this.isPlaying && this.audioContext && this.playbackStartTime > 0) {
+      return this.audioContext.currentTime - this.playbackStartTime;
+    }
+    return this.pauseTime;
+  }
+  
+  getDuration() {
+    let maxDuration = 0;
+    this.audioZones.forEach((zone) => {
+      if (zone.audioBuffer) {
+        const duration = zone.audioBuffer.duration;
+        if (duration > maxDuration) {
+          maxDuration = duration;
+        }
+      }
+    });
+    return maxDuration;
+  }
+  
+  seek(time) {
+    const wasPlaying = this.isPlaying;
+    
+    // Stop current playback
+    if (this.isPlaying) {
+      this.stopPreview();
+    }
+    
+    this.pauseTime = Math.max(0, time);
+    
+    // Restart if was playing
+    if (wasPlaying && this.audioZones.size > 0) {
+      this.startPreview();
+    }
   }
   
   getRandomColor() {

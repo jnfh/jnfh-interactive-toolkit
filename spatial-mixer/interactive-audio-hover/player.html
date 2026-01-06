@@ -340,7 +340,12 @@
     
     <!-- Toggle Panel Button -->
     <button class="toggle-panel-btn" id="togglePanelBtn" title="Toggle Controls">⚙️</button>
+    
+    <!-- Timeline Container -->
+    <div id="timeline-container"></div>
 
+    <link rel="stylesheet" href="../../css/universal-timeline.css">
+    <script src="../../js/universal-timeline.js"></script>
     <script src="/spatial-mixer/interactive-audio-hover/interactive-audio-hover.js"></script>
     <script>
         // Helper function to get base URL (directory of current file)
@@ -559,6 +564,14 @@
                     window.audioHover.startAnimationLoop();
                 }
                 
+                // Register player with timeline (timeline already initialized in DOMContentLoaded)
+                if (window.timeline && window.audioHover) {
+                    window.timeline.registerPlayer('spatial-mixer', window.audioHover);
+                    console.log('✓ Spatial mixer registered with timeline');
+                } else {
+                    console.warn('Timeline or audioHover not available for registration');
+                }
+                
                 console.log('✓ Configuration loaded successfully');
                 return true;
             } catch (error) {
@@ -568,6 +581,24 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
+            // Initialize Universal Timeline early (before config loads)
+            if (typeof UniversalTimeline !== 'undefined') {
+                try {
+                    window.timeline = new UniversalTimeline();
+                    const container = document.getElementById('timeline-container');
+                    if (container) {
+                        window.timeline.createUI('timeline-container');
+                        console.log('✓ Timeline initialized');
+                    } else {
+                        console.error('Timeline container not found');
+                    }
+                } catch (error) {
+                    console.error('Error initializing timeline:', error);
+                }
+            } else {
+                console.error('UniversalTimeline not loaded');
+            }
+            
             const loadingIndicator = document.getElementById('loadingIndicator');
             
             // Show loading indicator

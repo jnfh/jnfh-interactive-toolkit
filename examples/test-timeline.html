@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline Test</title>
+    <link rel="stylesheet" href="../css/universal-timeline.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: sans-serif;
+            padding-bottom: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Timeline Test</h1>
+    <p>If you can see the timeline at the bottom, it's working!</p>
+    
+    <div id="timeline-container"></div>
+    
+    <script src="../js/universal-timeline.js"></script>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const timeline = new UniversalTimeline();
+            timeline.createUI('timeline-container');
+            console.log('Timeline created:', timeline);
+        });
+    </script>
+</body>
+</html>
+
