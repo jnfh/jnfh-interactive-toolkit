@@ -14,6 +14,10 @@ class SoundmapPlayer {
     
     this.map = null;
     this.sourceMarkers = [];
+    
+    // Timeline integration
+    this.playbackStartTime = 0; // Audio context time when playback started
+    this.pauseTime = 0; // Time position when paused
   }
   
   async init() {
@@ -32,7 +36,7 @@ class SoundmapPlayer {
     this.map = L.map(this.mapContainer).setView(center, 15);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
+      attribution: 'ï¿½ OpenStreetMap',
       maxZoom: 19
     }).addTo(this.map);
     
@@ -161,8 +165,15 @@ class SoundmapPlayer {
     }
     
     this.isPlaying = true;
-    document.getElementById('play-btn').textContent = 'Stop Audio';
-    document.getElementById('status').classList.remove('status-hidden');
+    this.playbackStartTime = this.audioContext.currentTime - this.pauseTime;
+    
+    if (document.getElementById('play-btn')) {
+      document.getElementById('play-btn').textContent = 'Stop Audio';
+    }
+    const statusEl = document.getElementById('status');
+    if (statusEl) {
+      statusEl.classList.remove('status-hidden');
+    }
     
     console.log('Starting playback - move mouse over map');
     
@@ -172,15 +183,26 @@ class SoundmapPlayer {
       source.buffer = audioSource.audioBuffer;
       source.loop = audioSource.config.audio.loop;
       source.connect(audioSource.filterNode);
-      source.start(0);
+      // Use modulo to handle looping audio correctly
+      const offset = audioSource.config.audio.loop 
+        ? this.pauseTime % audioSource.audioBuffer.duration 
+        : Math.min(this.pauseTime, audioSource.audioBuffer.duration);
+      source.start(0, offset);
       audioSource.source = source;
     });
   }
   
   stopPlayback() {
     this.isPlaying = false;
-    document.getElementById('play-btn').textContent = 'Start Audio';
-    document.getElementById('status').classList.add('status-hidden');
+    this.pauseTime = this.getCurrentTime();
+    
+    if (document.getElementById('play-btn')) {
+      document.getElementById('play-btn').textContent = 'Start Audio';
+    }
+    const statusEl = document.getElementById('status');
+    if (statusEl) {
+      statusEl.classList.add('status-hidden');
+    }
     
     this.audioSources.forEach((audioSource) => {
       if (audioSource.source) {
@@ -189,6 +211,65 @@ class SoundmapPlayer {
       }
       audioSource.gainNode.gain.value = 0;
     });
+  }
+  
+  // Timeline integration methods
+  play() {
+    if (!this.audioContext) {
+      console.warn('Audio context not initialized');
+      return;
+    }
+    if (!this.isPlaying) {
+      this.startPlayback();
+    }
+  }
+  
+  pause() {
+    if (this.isPlaying) {
+      this.stopPlayback();
+    }
+  }
+  
+  stop() {
+    this.pause();
+    this.pauseTime = 0;
+    this.seek(0);
+  }
+  
+  getCurrentTime() {
+    if (this.isPlaying && this.audioContext && this.playbackStartTime > 0) {
+      return this.audioContext.currentTime - this.playbackStartTime;
+    }
+    return this.pauseTime;
+  }
+  
+  getDuration() {
+    let maxDuration = 0;
+    this.audioSources.forEach((audioSource) => {
+      if (audioSource.audioBuffer) {
+        const duration = audioSource.audioBuffer.duration;
+        if (duration > maxDuration) {
+          maxDuration = duration;
+        }
+      }
+    });
+    return maxDuration;
+  }
+  
+  seek(time) {
+    const wasPlaying = this.isPlaying;
+    
+    // Stop current playback
+    if (this.isPlaying) {
+      this.stopPlayback();
+    }
+    
+    this.pauseTime = Math.max(0, time);
+    
+    // Restart if was playing
+    if (wasPlaying && this.audioSources.size > 0) {
+      this.startPlayback();
+    }
   }
   
   updateListenerPosition(lat, lng) {

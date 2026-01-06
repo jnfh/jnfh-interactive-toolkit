@@ -51,6 +51,10 @@ class InteractiveAudioHover {
         // Track if initialized
         this._initialized = false;
         
+        // Timeline integration
+        this.playbackStartTime = 0; // Audio context time when playback started
+        this.pauseTime = 0; // Time position when paused
+        
         // Don't auto-init - let caller decide when to initialize
         // this.init();
     }
@@ -1232,7 +1236,7 @@ class InteractiveAudioHover {
         }
     }
 
-    startSource(source) {
+    startSource(source, offset = 0) {
         if (source.isPlaying) {
             console.log(`Source ${source.id} already playing`);
             return;
@@ -1253,7 +1257,7 @@ class InteractiveAudioHover {
             source.source.buffer = source.audioBuffer;
             source.source.loop = true;
             source.source.connect(source.gainNode);
-            source.source.start(0);
+            source.source.start(0, offset % source.audioBuffer.duration);
             source.isPlaying = true;
             console.log(`✓ Started source ${source.id} (${source.name || 'unnamed'})`);
         } catch (error) {
@@ -1321,11 +1325,12 @@ class InteractiveAudioHover {
         }
 
         this.isPlaying = true;
+        this.playbackStartTime = this.audioContext.currentTime - this.pauseTime;
         
         // Start all valid sources (they'll start at volume 0 and fade based on mouse position)
         validSources.forEach(source => {
             if (!source.isPlaying) {
-                this.startSource(source);
+                this.startSource(source, this.pauseTime);
             }
             // Ensure volume starts at 0 - will fade in based on mouse position
             if (source.gainNode) {
@@ -1342,12 +1347,68 @@ class InteractiveAudioHover {
 
     stopAll() {
         this.isPlaying = false;
+        this.pauseTime = this.getCurrentTime();
         
         this.sources.forEach(source => {
             this.stopSource(source);
         });
 
         this.updateStatus('Stopped');
+    }
+    
+    // Timeline integration methods
+    play() {
+        if (!this.isPlaying) {
+            this.playAll();
+        }
+    }
+    
+    pause() {
+        if (this.isPlaying) {
+            this.stopAll();
+        }
+    }
+    
+    stop() {
+        this.pause();
+        this.pauseTime = 0;
+        this.seek(0);
+    }
+    
+    getCurrentTime() {
+        if (this.isPlaying && this.audioContext && this.playbackStartTime > 0) {
+            return this.audioContext.currentTime - this.playbackStartTime;
+        }
+        return this.pauseTime;
+    }
+    
+    getDuration() {
+        let maxDuration = 0;
+        this.sources.forEach(source => {
+            if (source.audioBuffer) {
+                const duration = source.audioBuffer.duration;
+                if (duration > maxDuration) {
+                    maxDuration = duration;
+                }
+            }
+        });
+        return maxDuration;
+    }
+    
+    seek(time) {
+        const wasPlaying = this.isPlaying;
+        
+        // Stop current playback
+        if (this.isPlaying) {
+            this.stopAll();
+        }
+        
+        this.pauseTime = Math.max(0, time);
+        
+        // Restart if was playing
+        if (wasPlaying && this.sources.length > 0) {
+            this.playAll();
+        }
     }
 
     clearAll() {
