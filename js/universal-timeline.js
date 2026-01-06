@@ -290,10 +290,16 @@ class UniversalTimeline {
         const container = document.getElementById(containerId);
         if (!container) {
             console.error(`Container element not found: ${containerId}`);
+            console.error('Available IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
             return;
         }
         
         this.uiContainer = container;
+        
+        // Ensure container is visible
+        container.style.display = 'block';
+        container.style.visibility = 'visible';
+        container.style.opacity = '1';
         
         // Create timeline HTML
         container.innerHTML = `
@@ -319,6 +325,15 @@ class UniversalTimeline {
         `;
         
         console.log('Timeline UI created in container:', container);
+        console.log('Timeline HTML:', container.innerHTML.substring(0, 200));
+        
+        // Verify the timeline element was created
+        const timelineEl = container.querySelector('.universal-timeline');
+        if (!timelineEl) {
+            console.error('ERROR: Timeline element not found after creation!');
+            return;
+        }
+        console.log('Timeline element verified:', timelineEl);
         
         // Get UI elements
         this.playPauseBtn = container.querySelector('#timeline-play-pause');
