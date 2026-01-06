@@ -1,0 +1,76 @@
+<!-- 
+  WIX STUDIO EMBED SNIPPET
+  Copy this code and paste it into a Wix HTML Code element
+  
+  INSTRUCTIONS:
+  1. Replace YOUR_PLAYER_URL with where you're hosting player.html
+  2. Replace YOUR_CONFIG_URL with your config JSON file URL (from Wix Media or external)
+  3. Adjust height if needed (currently set to 100vh for full viewport height)
+-->
+
+<div id="audio-player-wrapper" style="width: 100%; height: 100vh; min-height: 600px; position: relative; background: transparent;">
+  <iframe 
+    id="audio-player-iframe"
+    src="YOUR_PLAYER_URL?config=YOUR_CONFIG_URL"
+    width="100%" 
+    height="100%"
+    frameborder="0"
+    allow="autoplay; microphone"
+    style="border: none; background: transparent; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+  </iframe>
+</div>
+
+<script>
+  // Make iframe responsive and handle URL encoding
+  (function() {
+    const wrapper = document.getElementById('audio-player-wrapper');
+    const iframe = document.getElementById('audio-player-iframe');
+    
+    if (!wrapper || !iframe) return;
+    
+    // Function to update iframe source with properly encoded config URL
+    function updatePlayerConfig(configUrl) {
+      if (configUrl) {
+        const encodedUrl = encodeURIComponent(configUrl);
+        const playerUrl = iframe.src.split('?')[0]; // Get base player URL
+        iframe.src = playerUrl + '?config=' + encodedUrl;
+      }
+    }
+    
+    // Function to resize iframe to match container
+    function resizeIframe() {
+      if (wrapper && iframe) {
+        const height = wrapper.offsetHeight || window.innerHeight;
+        iframe.style.height = height + 'px';
+      }
+    }
+    
+    // Handle window resize
+    window.addEventListener('resize', resizeIframe);
+    
+    // Initial resize
+    resizeIframe();
+    
+    // Optional: Listen for messages from iframe (for advanced integration)
+    window.addEventListener('message', function(event) {
+      // Verify origin for security
+      // if (event.origin !== 'https://your-player-domain.com') return;
+      
+      // Handle messages from player iframe
+      console.log('Message from player:', event.data);
+    });
+  })();
+</script>
+
+<!-- 
+  EXAMPLE USAGE:
+  
+  If your player is hosted at: https://example.com/player.html
+  And your config is at: https://static.wixstatic.com/media/abc123-config.json
+  
+  Change the iframe src to:
+  src="https://example.com/player.html?config=https%3A%2F%2Fstatic.wixstatic.com%2Fmedia%2Fabc123-config.json"
+  
+  Or use the JavaScript function:
+  updatePlayerConfig('https://static.wixstatic.com/media/abc123-config.json');
+-->

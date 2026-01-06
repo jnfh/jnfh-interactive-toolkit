@@ -307,7 +307,7 @@ class UniversalTimeline {
                     <div class="timeline-track">
                         <input type="range" class="timeline-slider" id="timeline-slider" 
                                min="0" max="100" value="0" step="0.1">
-                        <div class="timeline-progress"></div>
+                        <div class="timeline-progress" style="width: 0%;"></div>
                     </div>
                     <div class="timeline-time">
                         <span id="timeline-current-time">0:00</span>
@@ -317,6 +317,8 @@ class UniversalTimeline {
                 </div>
             </div>
         `;
+        
+        console.log('Timeline UI created in container:', container);
         
         // Get UI elements
         this.playPauseBtn = container.querySelector('#timeline-play-pause');
@@ -362,6 +364,8 @@ class UniversalTimeline {
         
         // Initial UI update
         this.updateUI();
+        
+        console.log('Timeline UI initialized successfully');
     }
     
     /**
@@ -385,9 +389,26 @@ class UniversalTimeline {
         }
         
         // Update slider
-        if (this.timelineSlider && this.duration > 0) {
-            const percent = (this.currentTime / this.duration) * 100;
-            this.timelineSlider.value = percent;
+        if (this.timelineSlider) {
+            if (this.duration > 0) {
+                const percent = (this.currentTime / this.duration) * 100;
+                this.timelineSlider.value = percent;
+                this.timelineSlider.max = 100;
+            } else {
+                this.timelineSlider.value = 0;
+                this.timelineSlider.max = 100;
+            }
+        }
+        
+        // Update progress bar
+        const progressBar = this.uiContainer.querySelector('.timeline-progress');
+        if (progressBar) {
+            if (this.duration > 0) {
+                const percent = (this.currentTime / this.duration) * 100;
+                progressBar.style.width = percent + '%';
+            } else {
+                progressBar.style.width = '0%';
+            }
         }
         
         // Update time displays

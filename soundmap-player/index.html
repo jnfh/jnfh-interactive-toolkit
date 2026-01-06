@@ -183,7 +183,7 @@
   </div>
   
   <!-- Timeline Container -->
-  <div id="timeline-container"></div>
+  <div id="timeline-container" style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000; min-height: 80px; background: rgba(20, 20, 20, 0.95);"></div>
   
   <script src="../js/universal-timeline.js"></script>
   <script src="js/soundmap-builder.js"></script>
@@ -207,6 +207,7 @@
         try {
           window.timeline = new UniversalTimeline();
           const container = document.getElementById('timeline-container');
+          console.log('Timeline container element:', container);
           if (container) {
             window.timeline.createUI('timeline-container');
             
@@ -215,16 +216,26 @@
               window.timeline.registerPlayer('soundmap-builder', builder);
               console.log('✓ Timeline initialized and builder registered');
             } else {
-              console.warn('Builder not ready for timeline registration');
+              console.warn('Builder not ready for timeline registration. Builder:', builder);
+              // Try registering anyway after a delay
+              setTimeout(() => {
+                if (builder && typeof builder.getCurrentTime === 'function' && window.timeline) {
+                  window.timeline.registerPlayer('soundmap-builder', builder);
+                  console.log('✓ Builder registered with timeline (delayed)');
+                }
+              }, 1000);
             }
           } else {
-            console.error('Timeline container not found');
+            console.error('Timeline container not found - checking DOM...');
+            console.log('Available elements:', document.querySelectorAll('[id*="timeline"]));
           }
         } catch (error) {
           console.error('Error initializing timeline:', error);
+          console.error('Error stack:', error.stack);
         }
       } else {
-        console.error('UniversalTimeline not loaded');
+        console.error('UniversalTimeline not loaded - check script path');
+        console.log('Available globals:', Object.keys(window).filter(k => k.toLowerCase().includes('time')));
       }
     });
   </script>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Interactive Audio Hover Experience - Embedded Player">
+    <title>Interactive Audio Experience</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        /* Full screen canvas */
+        #audioCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            cursor: crosshair;
+            display: block;
+            z-index: 1;
+        }
+
+        /* Minimal loading indicator */
+        .loading-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .loading-indicator.visible {
+            opacity: 1;
+        }
+
+        .loading-indicator.hidden {
+            opacity: 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="audioCanvas"></canvas>
+    <div class="loading-indicator" id="loadingIndicator">Loading audio experience...</div>
+
+    <script src="interactive-audio-hover.js"></script>
+    <script>
+        let configLoaded = false;
+
+        // Helper function to get base URL (directory of current file)
+        function getBaseUrl() {
+            const path = window.location.pathname;
+            const lastSlash = path.lastIndexOf('/');
+            if (lastSlash === -1) {
+                return window.location.origin + '/';
+            }
+            return window.location.origin + path.substring(0, lastSlash + 1);
+        }
+
+        // Convert simple array format to full config format
+        function convertSimpleArrayToConfig(simpleArray) {
+            const canvasWidth = window.innerWidth;
+            const canvasHeight = window.innerHeight;
+            const centerX = canvasWidth / 2;
+            const centerY = canvasHeight / 2;
+            const radius = Math.min(canvasWidth, canvasHeight) * 0.3;
+            
+            const sources = simpleArray.map((item, index) => {
+                const angle = (index / simpleArray.length) * Math.PI * 2;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                
+                return {
+                    id: Date.now() + index,
+                    name: item.title || item.name || `Track ${index + 1}`,
+                    editableTitle: item.title || item.name || `Track ${index + 1}`,
+                    color: item.color || null,
+                    audioUrl: item.url,
+                    x: x,
+                    y: y,
+                    baseX: x,
+                    baseY: y,
+                    vx: 0,
+                    vy: 0,
+                    currentVolume: 0,
+                    targetVolume: 0,
+                    isPlaying: false,
+                    driftAngle: Math.random() * Math.PI * 2,
+                    driftSpeed: 0.5 + Math.random() * 0.5,
+                    orbitalAngle: Math.random() * Math.PI * 2,
+                    orbitalRadius: 120 + Math.random() * 80,
+                    orbitalSpeed: 0.015 + Math.random() * 0.01,
+                    orbitalDirection: Math.random() > 0.5 ? 1 : -1
+                };
+            });
+            
+            return {
+                version: '1.0',
+                sources: sources,
+                settings: {
+                    masterVolume: 0.5,
+                    fadeRadius: 500,
+                    fadeSpeed: 0.5,
+                    physicsEnabled: true,
+                    physicsStrength: 1.0,
+                    driftStrength: 1.0,
+                    mouseRepulsion: 1.0,
+                    sourceRepulsion: 1.0,
+                    orbitalStrength: 1.0,
+                    orbitalSpeed: 0.1,
+                    spatialAudioEnabled: true,
+                    spatialAudioStrength: 1.0,
+                    reverbEnabled: true,
+                    reverbAmount: 0.3
+                }
+            };
+        }
+
+        async function loadConfigFromUrl(url) {
+            try {
+                console.log('🔍 Loading config from:', url);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                let config = await response.json();
+                console.log('✓ Config JSON parsed successfully');
+                
+                // Check if it's a simple array format
+                if (Array.isArray(config) && config.length > 0 && config[0].url) {
+                    console.log('🔄 Detected simple array format, converting...');
+                    config = convertSimpleArrayToConfig(config);
+                }
+                
+                return config;
+            } catch (error) {
+                console.error('❌ Error loading config from URL:', error);
+                throw error;
+            }
+        }
+
+        async function loadConfiguration(config) {
+            try {
+                console.log('🔧 Initializing audio hover system...');
+
+                // Initialize audio hover
+                window.audioHover = new InteractiveAudioHover();
+                console.log('✓ InteractiveAudioHover instance created');
+                
+                // Initialize audio context and canvas
+                await window.audioHover.init();
+                console.log('✓ Audio context and canvas initialized');
+                
+                // Ensure canvas is visible and ready
+                const canvas = document.getElementById('audioCanvas');
+                if (canvas && window.audioHover.canvas) {
+                    console.log('✓ Canvas element found and initialized');
+                    // Ensure background is transparent
+                    window.audioHover.backgroundColor = 'transparent';
+                    window.audioHover.backgroundTransparent = true;
+                    // Force initial draw
+                    window.audioHover.draw();
+                    console.log('✓ Canvas drawn with transparent background');
+                }
+                
+                // Set default volume for embedded player (50%)
+                window.audioHover.masterVolume = 0.5;
+                if (window.audioHover.masterGainNode) {
+                    window.audioHover.masterGainNode.gain.value = 0.5;
+                }
+                
+                // Force enable physics
+                window.audioHover.physicsEnabled = true;
+                window.audioHover.physicsStrength = 1.0;
+                window.audioHover.orbitalStrength = 1.0;
+                window.audioHover.driftStrength = 1.0;
+                
+                // Import configuration
+                console.log('📥 Importing configuration...');
+                await window.audioHover.importConfiguration(config, null);
+                console.log(`✓ Configuration imported. Sources loaded: ${window.audioHover.sources.length}`);
+                
+                // Force a redraw after import
+                if (window.audioHover.sources.length > 0) {
+                    window.audioHover.draw();
+                    console.log('✓ Canvas redrawn with sources');
+                }
+                
+                // Apply default volume (50%) after import
+                window.audioHover.masterVolume = 0.5;
+                if (window.audioHover.masterGainNode) {
+                    window.audioHover.masterGainNode.gain.value = 0.5;
+                }
+                
+                // Reduce reverb amount to prevent distortion
+                if (window.audioHover.reverbAmount > 0.3) {
+                    window.audioHover.reverbAmount = 0.3;
+                }
+                
+                if (window.audioHover.reverbSendGain) {
+                    window.audioHover.reverbSendGain.gain.value = window.audioHover.reverbAmount * 0.25;
+                }
+                
+                // Ensure physics are enabled
+                if (!window.audioHover.physicsEnabled) {
+                    window.audioHover.physicsEnabled = true;
+                }
+                if (window.audioHover.physicsStrength === 0) {
+                    window.audioHover.physicsStrength = 1.0;
+                }
+                
+                // Ensure animation loop is running
+                if (window.audioHover.animationFrameId === null) {
+                    window.audioHover.startAnimationLoop();
+                }
+                
+                console.log('✓ Configuration loaded successfully');
+                return true;
+            } catch (error) {
+                console.error('Error loading configuration:', error);
+                throw error;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            // Show loading indicator
+            loadingIndicator.classList.add('visible');
+            
+            // Determine config URL
+            const urlParams = new URLSearchParams(window.location.search);
+            let configUrl = urlParams.get('config');
+            
+            // If no config parameter, use default config.json
+            if (!configUrl) {
+                const baseUrl = getBaseUrl();
+                configUrl = baseUrl + 'config.json';
+            } else if (!configUrl.startsWith('http://') && !configUrl.startsWith('https://')) {
+                // Relative path - construct full URL
+                const baseUrl = getBaseUrl();
+                configUrl = baseUrl + configUrl;
+            }
+            
+            console.log('🎯 Loading config from:', configUrl);
+            
+            try {
+                // Load config
+                const config = await loadConfigFromUrl(configUrl);
+                
+                // Load configuration into player
+                await loadConfiguration(config);
+                
+                // Auto-play after a short delay
+                if (window.audioHover && window.audioHover.sources.length > 0) {
+                    setTimeout(async () => {
+                        // Resume audio context if suspended (required for autoplay)
+                        if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                            try {
+                                await window.audioHover.audioContext.resume();
+                                console.log('✓ Audio context resumed');
+                            } catch (resumeError) {
+                                console.warn('⚠️ Could not resume audio context:', resumeError);
+                            }
+                        }
+                        
+                        window.audioHover.playAll();
+                        console.log('✓ Auto-play started');
+                        
+                        // Hide loading indicator
+                        loadingIndicator.classList.remove('visible');
+                        setTimeout(() => {
+                            loadingIndicator.classList.add('hidden');
+                        }, 300);
+                    }, 500);
+                } else {
+                    console.warn('⚠️ No sources loaded - cannot auto-play');
+                    loadingIndicator.classList.remove('visible');
+                    setTimeout(() => {
+                        loadingIndicator.classList.add('hidden');
+                    }, 300);
+                }
+                
+                // Resume audio context on any user interaction (for autoplay policy)
+                const resumeOnInteraction = async () => {
+                    if (window.audioHover && window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                        try {
+                            await window.audioHover.audioContext.resume();
+                            console.log('✓ Audio context resumed on user interaction');
+                            if (!window.audioHover.isPlaying) {
+                                window.audioHover.playAll();
+                            }
+                        } catch (resumeError) {
+                            console.warn('⚠️ Could not resume audio context:', resumeError);
+                        }
+                    }
+                };
+                
+                // Listen for user interactions
+                document.addEventListener('click', resumeOnInteraction, { once: true });
+                document.addEventListener('touchstart', resumeOnInteraction, { once: true });
+                document.addEventListener('keydown', resumeOnInteraction, { once: true });
+                
+            } catch (error) {
+                console.error('❌ Failed to load configuration:', error);
+                loadingIndicator.textContent = 'Failed to load audio experience';
+                loadingIndicator.style.color = '#f44336';
+                // Keep loading indicator visible to show error
+            }
+        });
+    </script>
+</body>
+</html>
+

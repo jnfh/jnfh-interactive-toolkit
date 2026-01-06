@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Interactive Audio Hover Builder - Create and export interactive audio experiences">
+    <title>Interactive Audio Hover Builder | Create & Export</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.8);
+            --accent-green: #4CAF50;
+            --accent-blue: #2196F3;
+            --accent-red: #f44336;
+            --accent-orange: #FF9800;
+            --accent-purple: #9C27B0;
+            --shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--primary-gradient);
+            background-attachment: fixed;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Full screen canvas */
+        #audioCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.2);
+            cursor: crosshair;
+            display: block;
+            z-index: 1;
+        }
+
+        /* Settings toggle button */
+        .settings-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 50px;
+            padding: 12px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        .settings-toggle:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        /* Settings panel */
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: -450px;
+            width: 450px;
+            height: 100vh;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-left: 1px solid var(--glass-border);
+            box-shadow: -8px 0 32px rgba(0,0,0,0.3);
+            z-index: 999;
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 20px;
+        }
+
+        .settings-panel.open {
+            right: 0;
+        }
+
+        .settings-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .settings-panel::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .settings-panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        .settings-panel::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Glass morphism panels */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        /* Controls */
+        .controls-section {
+            margin-bottom: 20px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-header h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
+        }
+
+        .section-toggle {
+            font-size: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .section-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .section-content {
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            max-height: 2000px;
+            opacity: 1;
+        }
+
+        .section-content.collapsed {
+            max-height: 0;
+            margin: 0;
+            padding: 0;
+            opacity: 0;
+        }
+
+        .controls-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            opacity: 0.9;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .control-value {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            font-weight: 500;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #da190b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+        }
+
+        .btn-upload {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .btn-upload:hover {
+            background: #0b7dda;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-export {
+            background: var(--accent-orange);
+            color: white;
+        }
+
+        .btn-export:hover {
+            background: #F57C00;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
+        }
+
+        .btn-import {
+            background: var(--accent-purple);
+            color: white;
+        }
+
+        .btn-import:hover {
+            background: #7B1FA2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(156, 39, 176, 0.4);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--accent-blue);
+        }
+
+        input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+        }
+
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.3);
+            color: white;
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .source-editor-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .source-editor-item h4 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
+        }
+
+        /* Status display */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .status-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+        }
+
+        .status-item strong {
+            display: block;
+            opacity: 0.7;
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+        }
+
+        .status-item span {
+            font-size: 1.2rem;
+            font-weight: 600;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
+        }
+
+        /* Source info */
+        .audio-source-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .source-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+        }
+
+        .source-item.active {
+            background: rgba(76, 175, 80, 0.2);
+            border-color: var(--accent-green);
+            box-shadow: 0 0 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .export-status, .import-status {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+        }
+
+        .config-preview {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            font-size: 0.75rem;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .settings-panel {
+                width: 100vw;
+                right: -100vw;
+            }
+
+            .settings-toggle {
+                top: 10px;
+                right: 10px;
+                padding: 10px 15px;
+                font-size: 0.9rem;
+            }
+
+            .glass-panel {
+                padding: 15px;
+            }
+
+            .controls-row {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+        }
+
+        /* Touch support */
+        @media (hover: none) {
+            .btn:hover {
+                transform: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="audioCanvas"></canvas>
+
+    <button class="settings-toggle" id="settingsToggle" onclick="toggleSettingsPanel()">
+        <span>⚙️</span>
+        <span id="settingsToggleText">Settings</span>
+    </button>
+
+    <div class="settings-panel" id="settingsPanel">
+        <div style="margin-bottom: 20px;">
+            <h1 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 5px; text-shadow: 2px 2px 8px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);">🎵 Audio Hover Builder</h1>
+            <p style="font-size: 0.9rem; opacity: 0.8; margin-bottom: 20px; text-shadow: 1px 1px 3px rgba(0,0,0,0.8), 0 0 6px rgba(0,0,0,0.6);">Create and export interactive audio experiences</p>
+        </div>
+
+        <div class="glass-panel controls-section">
+            <div class="section-header" onclick="toggleSection('main-controls')">
+                <h3>🎛️ Main Controls</h3>
+                <span class="section-toggle" id="main-controls-toggle">▼</span>
+            </div>
+            <div class="section-content" id="main-controls">
+                <div class="controls-row">
+                    <button id="playBtn" class="btn btn-primary">▶ Play All</button>
+                    <button id="stopBtn" class="btn btn-secondary">⏹ Stop All</button>
+                    <div class="control-group">
+                        <label for="masterVolume">Master Volume</label>
+                        <input type="range" id="masterVolume" min="0" max="100" value="100">
+                        <span class="control-value" id="masterVolumeValue">100%</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="fadeRadius">Fade Radius</label>
+                        <input type="range" id="fadeRadius" min="50" max="500" value="500">
+                        <span class="control-value" id="fadeRadiusValue">500px</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="fadeSpeed">Fade Speed</label>
+                        <input type="range" id="fadeSpeed" min="0.01" max="0.5" step="0.01" value="0.5">
+                        <span class="control-value" id="fadeSpeedValue">0.5s</span>
+                    </div>
+                </div>
+                <div class="controls-row">
+                    <input type="file" id="audioFileInput" accept="audio/*" multiple>
+                    <label for="audioFileInput" class="btn btn-upload">📁 Add Audio Files</label>
+                    <button id="loadUrlBtn" class="btn btn-upload">🔗 Load from URLs</button>
+                    <button id="loadWixCmsBtn" class="btn btn-upload">📊 Load from Wix CMS</button>
+                    <button id="loadDropboxBtn" class="btn btn-upload">☁️ Load from Dropbox</button>
+                    <button id="clearBtn" class="btn btn-secondary">🗑️ Clear All</button>
+                </div>
+                <div id="urlSection" style="display: none; margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
+                    <div class="control-group" style="margin-bottom: 10px;">
+                        <label for="audioUrlInput">Audio File URLs (one per line or comma-separated):</label>
+                        <textarea id="audioUrlInput" rows="4" placeholder="https://static.wixstatic.com/media/your-audio1.mp3&#10;https://static.wixstatic.com/media/your-audio2.wav&#10;https://your-cdn.com/audio3.mp3" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: inherit; resize: vertical;"></textarea>
+                        <small style="opacity: 0.7; font-size: 0.85rem; margin-top: 5px; display: block;">Tip: Upload to Wix Media Manager, then copy the file links. You can paste multiple URLs.</small>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="loadUrlFileBtn" class="btn btn-primary">Load URLs</button>
+                        <button id="closeUrlBtn" class="btn btn-secondary">Cancel</button>
+                    </div>
+                    <div id="urlStatus" style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;"></div>
+                </div>
+                <div id="wixCmsSection" style="display: none; margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
+                    <div class="control-group" style="margin-bottom: 10px;">
+                        <label for="wixCmsDataInput">Wix CMS Data (JSON format):</label>
+                        <textarea id="wixCmsDataInput" rows="8" placeholder='[&#10;  {&#10;    "url": "https://static.wixstatic.com/media/track1.mp3",&#10;    "title": "Track 1",&#10;    "color": "#4CAF50"&#10;  },&#10;  {&#10;    "url": "https://static.wixstatic.com/media/track2.mp3",&#10;    "title": "Track 2",&#10;    "color": "#2196F3"&#10;  }&#10;]' style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: monospace; font-size: 0.85rem; resize: vertical;"></textarea>
+                        <small style="opacity: 0.7; font-size: 0.85rem; margin-top: 5px; display: block;">
+                            <strong>Format:</strong> JSON array with objects containing:<br>
+                            • <code>url</code> (required): Audio file URL from Wix Media Manager<br>
+                            • <code>title</code> (optional): Display title for the track<br>
+                            • <code>color</code> (optional): Hex color code (e.g., "#4CAF50")<br>
+                            <strong>Tip:</strong> Export your Wix CMS collection as JSON and paste it here, or manually create the array.
+                        </small>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button id="loadWixCmsDataBtn" class="btn btn-primary">Load from CMS Data</button>
+                        <button id="loadWixCmsFromUrlBtn" class="btn btn-primary">Load from CMS URL</button>
+                        <button id="closeWixCmsBtn" class="btn btn-secondary">Cancel</button>
+                    </div>
+                    <div id="wixCmsUrlSection" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                        <div class="control-group" style="margin-bottom: 10px;">
+                            <label for="wixCmsUrlInput">Wix CMS API Endpoint or JSON URL:</label>
+                            <input type="text" id="wixCmsUrlInput" placeholder="https://your-site.wixsite.com/_functions/api/audio-tracks" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: inherit;">
+                            <small style="opacity: 0.7; font-size: 0.85rem; margin-top: 5px; display: block;">
+                                Enter a URL that returns JSON in the format shown above. This can be a Wix HTTP Function, external API, or JSON file.
+                            </small>
+                        </div>
+                        <button id="fetchWixCmsUrlBtn" class="btn btn-primary">Fetch from URL</button>
+                    </div>
+                    <div id="wixCmsStatus" style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;"></div>
+                </div>
+                <div id="dropboxSection" style="display: none; margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
+                    <div class="control-group" style="margin-bottom: 10px;">
+                        <label for="dropboxLinks">Dropbox Shared Links (one per line):</label>
+                        <textarea id="dropboxLinks" rows="4" placeholder="https://www.dropbox.com/s/xxxxx/file1.mp3?dl=0&#10;https://www.dropbox.com/s/xxxxx/file2.wav?dl=0"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="loadDropboxFilesBtn" class="btn btn-primary">Load Files</button>
+                        <button id="closeDropboxBtn" class="btn btn-secondary">Cancel</button>
+                    </div>
+                    <div id="dropboxStatus" style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel controls-section">
+            <div class="section-header" onclick="toggleSection('export-controls')">
+                <h3>📤 Export Configuration</h3>
+                <span class="section-toggle collapsed" id="export-controls-toggle">▼</span>
+            </div>
+            <div class="section-content collapsed" id="export-controls">
+                <p style="margin-bottom: 15px; opacity: 0.9; font-size: 0.9rem;">
+                    Export your configuration to share or embed. If you loaded audio from URLs (Wix Media, etc.), those URLs will be saved instead of embedding audio. Otherwise, choose whether to include audio files (larger file) or just positions/settings.
+                </p>
+                <div class="controls-row">
+                    <button id="exportConfigBtn" class="btn btn-export">💾 Export Config (No Audio)</button>
+                    <button id="exportWithAudioBtn" class="btn btn-export">💾 Export Config + Audio</button>
+                    <button id="copyConfigBtn" class="btn btn-export">📋 Copy Config</button>
+                </div>
+                <div id="exportStatus" class="export-status" style="display: none;"></div>
+                <div id="exportProgressContainer" style="display: none; margin-top: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem;">
+                        <span id="exportProgressText">Processing...</span>
+                        <span id="exportProgressPercent">0%</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; overflow: hidden;">
+                        <div id="exportProgressBar" style="height: 100%; background: linear-gradient(90deg, #2196F3, #4CAF50); width: 0%; transition: width 0.3s ease; border-radius: 4px;"></div>
+                    </div>
+                    <div id="exportProgressDetails" style="margin-top: 8px; font-size: 0.85rem; opacity: 0.8;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel controls-section">
+            <div class="section-header" onclick="toggleSection('import-controls')">
+                <h3>📥 Import Configuration</h3>
+                <span class="section-toggle collapsed" id="import-controls-toggle">▼</span>
+            </div>
+            <div class="section-content collapsed" id="import-controls">
+                <p style="margin-bottom: 15px; opacity: 0.9; font-size: 0.9rem;">
+                    Load a previously exported configuration. If the config doesn't include audio, you'll need to provide the audio files separately.
+                </p>
+                <div class="controls-row">
+                    <input type="file" id="configFileInput" accept=".json">
+                    <label for="configFileInput" class="btn btn-import">📂 Load Config File</label>
+                    <input type="file" id="audioFilesForImport" accept="audio/*" multiple>
+                    <label for="audioFilesForImport" class="btn btn-import">🎵 Add Audio Files</label>
+                    <button id="importConfigBtn" class="btn btn-primary">📥 Import Configuration</button>
+                </div>
+                <div id="importStatus" class="import-status" style="display: none;"></div>
+                <div id="configPreview" class="config-preview" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="glass-panel controls-section">
+            <div class="section-header" onclick="toggleSection('spatial-controls')">
+                <h3>🎧 Spatial Audio</h3>
+                <span class="section-toggle collapsed" id="spatial-controls-toggle">▼</span>
+            </div>
+            <div class="section-content collapsed" id="spatial-controls">
+                <div class="controls-row">
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="spatialAudioEnabled" checked>
+                            <span style="margin-left: 8px;">Enable Spatial Audio</span>
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label for="spatialAudioStrength">Spatial Strength</label>
+                        <input type="range" id="spatialAudioStrength" min="0" max="1" step="0.01" value="1.0">
+                        <span class="control-value" id="spatialAudioStrengthValue">100%</span>
+                    </div>
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="reverbEnabled" checked>
+                            <span style="margin-left: 8px;">Enable Reverb</span>
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label for="reverbAmount">Reverb Amount</label>
+                        <input type="range" id="reverbAmount" min="0" max="1" step="0.01" value="1.0">
+                        <span class="control-value" id="reverbAmountValue">100%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel controls-section">
+            <div class="section-header" onclick="toggleSection('physics-controls')">
+                <h3>⚙️ Physics & Movement</h3>
+                <span class="section-toggle collapsed" id="physics-controls-toggle">▼</span>
+            </div>
+            <div class="section-content collapsed" id="physics-controls">
+                <div class="controls-row">
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="physicsEnabled" checked>
+                            <span style="margin-left: 8px;">Physics Movement</span>
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label for="physicsStrength">Physics Strength</label>
+                        <input type="range" id="physicsStrength" min="0" max="1" step="0.01" value="1.0">
+                        <span class="control-value" id="physicsStrengthValue">100%</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="driftStrength">Drift Strength</label>
+                        <input type="range" id="driftStrength" min="0" max="1" step="0.01" value="1.0">
+                        <span class="control-value" id="driftStrengthValue">100%</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="orbitalStrength">Orbital Strength</label>
+                        <input type="range" id="orbitalStrength" min="0" max="1" step="0.01" value="1.0">
+                        <span class="control-value" id="orbitalStrengthValue">100%</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="orbitalSpeed">Orbital Speed</label>
+                        <input type="range" id="orbitalSpeed" min="0" max="0.1" step="0.001" value="0.1">
+                        <span class="control-value" id="orbitalSpeedValue">100%</span>
+                    </div>
+                </div>
+                <div class="controls-row">
+                    <div class="control-group">
+                        <label for="mouseRepulsion">Close Range Repulsion</label>
+                        <input type="range" id="mouseRepulsion" min="0" max="1" step="0.01" value="1.0">
+                        <span class="control-value" id="mouseRepulsionValue">100%</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="sourceRepulsion">Source Repulsion</label>
+                        <input type="range" id="sourceRepulsion" min="0" max="1" step="0.01" value="1.0">
+                        <span class="control-value" id="sourceRepulsionValue">100%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel controls-section">
+            <div class="section-header" onclick="toggleSection('source-editor')">
+                <h3>🎨 Edit Sources</h3>
+                <span class="section-toggle collapsed" id="source-editor-toggle">▼</span>
+            </div>
+            <div class="section-content collapsed" id="source-editor">
+                <div id="sourceEditorList" style="display: flex; flex-direction: column; gap: 15px;">
+                    <p style="opacity: 0.8; font-size: 0.9rem; text-align: center; padding: 10px;">No sources loaded yet. Add audio files to edit them.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel controls-section">
+            <div class="section-header" onclick="toggleSection('status-info')">
+                <h3>📊 Status & Info</h3>
+                <span class="section-toggle" id="status-info-toggle">▼</span>
+            </div>
+            <div class="section-content" id="status-info">
+                <div class="status-grid">
+                    <div class="status-item">
+                        <strong>Sources</strong>
+                        <span id="sourceCount">0</span>
+                    </div>
+                    <div class="status-item">
+                        <strong>Mouse Position</strong>
+                        <span id="mousePos">-</span>
+                    </div>
+                    <div class="status-item">
+                        <strong>Active Sources</strong>
+                        <span id="activeCount">0</span>
+                    </div>
+                </div>
+                <div class="audio-source-info" id="sourceInfo"></div>
+            </div>
+        </div>
+
+        <div class="glass-panel controls-section">
+            <div class="section-header" onclick="toggleSection('help-info')">
+                <h3>📖 How to Use</h3>
+                <span class="section-toggle" id="help-info-toggle">▼</span>
+            </div>
+            <div class="section-content collapsed" id="help-info">
+                <ul style="list-style: none; padding: 0; margin: 0;">
+                    <li style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>Add Audio:</strong> Click "Add Audio Files" or "Load from Dropbox"</li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>Place Sources:</strong> Click anywhere on the canvas to place sources</li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>Move Sources:</strong> Click and drag any source to reposition it</li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>Export:</strong> Use "Export Config" to save positions and settings</li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>Import:</strong> Load a previously exported configuration file</li>
+                    <li style="padding: 8px 0;"><strong>Share:</strong> Export your configuration and use player.html to create embeddable instances</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Settings panel toggle
+        function toggleSettingsPanel() {
+            const panel = document.getElementById('settingsPanel');
+            const toggle = document.getElementById('settingsToggle');
+            const toggleText = document.getElementById('settingsToggleText');
+            
+            panel.classList.toggle('open');
+            if (panel.classList.contains('open')) {
+                toggleText.textContent = 'Close';
+            } else {
+                toggleText.textContent = 'Settings';
+            }
+        }
+
+        // Collapsible sections
+        function toggleSection(sectionId) {
+            const content = document.getElementById(sectionId);
+            const toggle = document.getElementById(sectionId + '-toggle');
+            if (content && toggle) {
+                content.classList.toggle('collapsed');
+                toggle.classList.toggle('collapsed');
+            }
+        }
+    </script>
+    <script src="interactive-audio-hover.js"></script>
+    <script>
+        let loadedConfig = null;
+        let audioFilesForImport = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            window.audioHover = new InteractiveAudioHover();
+            // Initialize audio hover (constructor doesn't auto-init anymore)
+            await window.audioHover.init();
+            
+            // Update mouse position display periodically
+            setInterval(() => {
+                if (window.audioHover) {
+                    window.audioHover.updateMousePos();
+                    window.audioHover.updateSourceInfo();
+                }
+            }, 100);
+
+            // Export buttons
+            document.getElementById('exportConfigBtn').addEventListener('click', () => {
+                window.audioHover.downloadConfiguration(false);
+                const statusEl = document.getElementById('exportStatus');
+                statusEl.textContent = '✓ Configuration exported (without audio)';
+                statusEl.style.color = '#4CAF50';
+                statusEl.style.display = 'block';
+            });
+
+            document.getElementById('exportWithAudioBtn').addEventListener('click', async () => {
+                const statusEl = document.getElementById('exportStatus');
+                const progressContainer = document.getElementById('exportProgressContainer');
+                const progressBar = document.getElementById('exportProgressBar');
+                const progressText = document.getElementById('exportProgressText');
+                const progressPercent = document.getElementById('exportProgressPercent');
+                const progressDetails = document.getElementById('exportProgressDetails');
+                
+                // Show progress UI
+                statusEl.style.display = 'none';
+                progressContainer.style.display = 'block';
+                progressBar.style.width = '0%';
+                progressPercent.textContent = '0%';
+                progressText.textContent = 'Starting export...';
+                progressDetails.textContent = '';
+                
+                // Disable button during export
+                const btn = document.getElementById('exportWithAudioBtn');
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = '⏳ Exporting...';
+                
+                try {
+                    await window.audioHover.downloadConfiguration(true, (progress) => {
+                        // Update progress bar
+                        progressBar.style.width = progress.percent + '%';
+                        progressPercent.textContent = progress.percent + '%';
+                        progressText.textContent = progress.message || 'Processing...';
+                        
+                        if (progress.details) {
+                            progressDetails.textContent = progress.details;
+                        } else if (progress.current && progress.total) {
+                            progressDetails.textContent = `File ${progress.current} of ${progress.total}`;
+                        }
+                    });
+                    
+                    // Success
+                    statusEl.textContent = '✓ Configuration with audio exported successfully';
+                    statusEl.style.color = '#4CAF50';
+                    statusEl.style.display = 'block';
+                    progressContainer.style.display = 'none';
+                } catch (error) {
+                    statusEl.textContent = '✗ Error: ' + error.message;
+                    statusEl.style.color = '#f44336';
+                    statusEl.style.display = 'block';
+                    progressContainer.style.display = 'none';
+                } finally {
+                    // Re-enable button
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            });
+
+            document.getElementById('copyConfigBtn').addEventListener('click', () => {
+                const configJson = window.audioHover.exportConfiguration();
+                navigator.clipboard.writeText(configJson).then(() => {
+                    const statusEl = document.getElementById('exportStatus');
+                    statusEl.textContent = '✓ Configuration copied to clipboard';
+                    statusEl.style.color = '#4CAF50';
+                    statusEl.style.display = 'block';
+                }).catch(err => {
+                    const statusEl = document.getElementById('exportStatus');
+                    statusEl.textContent = '✗ Failed to copy: ' + err.message;
+                    statusEl.style.color = '#f44336';
+                    statusEl.style.display = 'block';
+                });
+            });
+
+            // Import buttons
+            document.getElementById('configFileInput').addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                try {
+                    const text = await file.text();
+                    loadedConfig = JSON.parse(text);
+                    
+                    document.getElementById('configPreview').textContent = JSON.stringify(loadedConfig, null, 2);
+                    document.getElementById('configPreview').style.display = 'block';
+                    const statusEl = document.getElementById('importStatus');
+                    statusEl.textContent = `✓ Config loaded: ${loadedConfig.sources?.length || 0} sources`;
+                    statusEl.style.color = '#4CAF50';
+                    statusEl.style.display = 'block';
+                } catch (error) {
+                    const statusEl = document.getElementById('importStatus');
+                    statusEl.textContent = '✗ Error loading config: ' + error.message;
+                    statusEl.style.color = '#f44336';
+                    statusEl.style.display = 'block';
+                    loadedConfig = null;
+                }
+            });
+
+            document.getElementById('audioFilesForImport').addEventListener('change', (e) => {
+                audioFilesForImport = Array.from(e.target.files);
+                const statusEl = document.getElementById('importStatus');
+                statusEl.textContent = `✓ ${audioFilesForImport.length} audio file(s) ready`;
+                statusEl.style.color = '#4CAF50';
+                statusEl.style.display = 'block';
+            });
+
+            document.getElementById('importConfigBtn').addEventListener('click', async () => {
+                if (!loadedConfig) {
+                    const statusEl = document.getElementById('importStatus');
+                    statusEl.textContent = '✗ Please load a configuration file first';
+                    statusEl.style.color = '#f44336';
+                    statusEl.style.display = 'block';
+                    return;
+                }
+
+                const statusEl = document.getElementById('importStatus');
+                statusEl.textContent = 'Importing...';
+                statusEl.style.color = '#2196F3';
+                statusEl.style.display = 'block';
+
+                try {
+                    const audioFiles = audioFilesForImport.length > 0 ? audioFilesForImport : null;
+                    await window.audioHover.importConfiguration(loadedConfig, audioFiles);
+                    
+                    statusEl.textContent = '✓ Configuration imported successfully';
+                    statusEl.style.color = '#4CAF50';
+                    document.getElementById('configPreview').style.display = 'none';
+                    
+                    // Reset
+                    loadedConfig = null;
+                    audioFilesForImport = [];
+                    document.getElementById('configFileInput').value = '';
+                    document.getElementById('audioFilesForImport').value = '';
+                } catch (error) {
+                    statusEl.textContent = '✗ Error importing: ' + error.message;
+                    statusEl.style.color = '#f44336';
+                }
+            });
+
+            // URL loading handlers
+            document.getElementById('loadUrlBtn').addEventListener('click', () => {
+                const urlSection = document.getElementById('urlSection');
+                const dropboxSection = document.getElementById('dropboxSection');
+                const wixCmsSection = document.getElementById('wixCmsSection');
+                if (urlSection) {
+                    urlSection.style.display = urlSection.style.display === 'none' ? 'block' : 'none';
+                    if (dropboxSection) dropboxSection.style.display = 'none';
+                    if (wixCmsSection) wixCmsSection.style.display = 'none';
+                }
+            });
+
+            // Wix CMS loading handlers
+            document.getElementById('loadWixCmsBtn').addEventListener('click', () => {
+                const wixCmsSection = document.getElementById('wixCmsSection');
+                const urlSection = document.getElementById('urlSection');
+                const dropboxSection = document.getElementById('dropboxSection');
+                if (wixCmsSection) {
+                    wixCmsSection.style.display = wixCmsSection.style.display === 'none' ? 'block' : 'none';
+                    if (urlSection) urlSection.style.display = 'none';
+                    if (dropboxSection) dropboxSection.style.display = 'none';
+                }
+            });
+
+            document.getElementById('closeWixCmsBtn').addEventListener('click', () => {
+                const wixCmsSection = document.getElementById('wixCmsSection');
+                if (wixCmsSection) {
+                    wixCmsSection.style.display = 'none';
+                    document.getElementById('wixCmsDataInput').value = '';
+                    document.getElementById('wixCmsUrlInput').value = '';
+                    document.getElementById('wixCmsStatus').textContent = '';
+                    document.getElementById('wixCmsUrlSection').style.display = 'none';
+                    window.audioHover.pendingAudioUrls = [];
+                    window.audioHover.sourcePlacementMode = false;
+                    window.audioHover.canvas.style.cursor = 'default';
+                }
+            });
+
+            document.getElementById('loadWixCmsFromUrlBtn').addEventListener('click', () => {
+                const urlSection = document.getElementById('wixCmsUrlSection');
+                if (urlSection) {
+                    urlSection.style.display = urlSection.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+
+            document.getElementById('loadWixCmsDataBtn').addEventListener('click', async () => {
+                const cmsDataInput = document.getElementById('wixCmsDataInput');
+                const cmsStatus = document.getElementById('wixCmsStatus');
+                const loadBtn = document.getElementById('loadWixCmsDataBtn');
+                
+                const cmsDataText = cmsDataInput.value.trim();
+                if (!cmsDataText) {
+                    cmsStatus.textContent = 'Please enter Wix CMS data';
+                    cmsStatus.style.color = '#f44336';
+                    return;
+                }
+
+                try {
+                    const cmsData = JSON.parse(cmsDataText);
+                    if (!Array.isArray(cmsData)) {
+                        throw new Error('CMS data must be an array of objects');
+                    }
+
+                    // Validate and extract URLs, titles, and colors
+                    const validItems = [];
+                    const invalidItems = [];
+                    
+                    for (const item of cmsData) {
+                        if (!item.url) {
+                            invalidItems.push('Missing url field');
+                            continue;
+                        }
+                        
+                        try {
+                            new URL(item.url);
+                            validItems.push({
+                                url: item.url,
+                                title: item.title || item.name || item.filename || 'Untitled',
+                                color: item.color || null
+                            });
+                        } catch (e) {
+                            invalidItems.push(`Invalid URL: ${item.url}`);
+                        }
+                    }
+
+                    if (validItems.length === 0) {
+                        cmsStatus.textContent = '✗ No valid items found in CMS data';
+                        cmsStatus.style.color = '#f44336';
+                        return;
+                    }
+
+                    // Store for placement
+                    window.audioHover.pendingWixCmsItems = validItems;
+                    window.audioHover.sourcePlacementMode = true;
+                    window.audioHover.canvas.style.cursor = 'crosshair';
+                    
+                    cmsStatus.textContent = `✓ ${validItems.length} item(s) ready${invalidItems.length > 0 ? ` (${invalidItems.length} invalid)` : ''}. Click on canvas to place each source.`;
+                    cmsStatus.style.color = '#4CAF50';
+                    
+                } catch (error) {
+                    cmsStatus.textContent = '✗ Error parsing CMS data: ' + error.message;
+                    cmsStatus.style.color = '#f44336';
+                }
+            });
+
+            document.getElementById('fetchWixCmsUrlBtn').addEventListener('click', async () => {
+                const cmsUrlInput = document.getElementById('wixCmsUrlInput');
+                const cmsStatus = document.getElementById('wixCmsStatus');
+                const fetchBtn = document.getElementById('fetchWixCmsUrlBtn');
+                
+                const cmsUrl = cmsUrlInput.value.trim();
+                if (!cmsUrl) {
+                    cmsStatus.textContent = 'Please enter a URL';
+                    cmsStatus.style.color = '#f44336';
+                    return;
+                }
+
+                try {
+                    new URL(cmsUrl);
+                } catch (e) {
+                    cmsStatus.textContent = '✗ Invalid URL format';
+                    cmsStatus.style.color = '#f44336';
+                    return;
+                }
+
+                // Fetch from URL
+                fetchBtn.disabled = true;
+                fetchBtn.textContent = 'Loading...';
+                cmsStatus.textContent = 'Fetching data from URL...';
+                cmsStatus.style.color = '#2196F3';
+
+                try {
+                    const response = await fetch(cmsUrl);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const cmsData = await response.json();
+                    
+                    // Populate the textarea with fetched data
+                    document.getElementById('wixCmsDataInput').value = JSON.stringify(cmsData, null, 2);
+                    
+                    // Auto-load the data
+                    document.getElementById('loadWixCmsDataBtn').click();
+                    
+                    cmsStatus.textContent = '✓ Data fetched successfully';
+                    cmsStatus.style.color = '#4CAF50';
+                } catch (error) {
+                    cmsStatus.textContent = '✗ Error fetching data: ' + error.message;
+                    cmsStatus.style.color = '#f44336';
+                } finally {
+                    fetchBtn.disabled = false;
+                    fetchBtn.textContent = 'Fetch from URL';
+                }
+            });
+
+            document.getElementById('closeUrlBtn').addEventListener('click', () => {
+                const urlSection = document.getElementById('urlSection');
+                if (urlSection) {
+                    urlSection.style.display = 'none';
+                    document.getElementById('audioUrlInput').value = '';
+                    document.getElementById('urlStatus').textContent = '';
+                    // Clear pending URLs
+                    window.audioHover.pendingAudioUrls = [];
+                    window.audioHover.sourcePlacementMode = false;
+                    window.audioHover.canvas.style.cursor = 'default';
+                }
+            });
+
+            document.getElementById('loadUrlFileBtn').addEventListener('click', async () => {
+                const urlInput = document.getElementById('audioUrlInput');
+                const urlStatus = document.getElementById('urlStatus');
+                const loadBtn = document.getElementById('loadUrlFileBtn');
+                
+                const urlText = urlInput.value.trim();
+                if (!urlText) {
+                    urlStatus.textContent = 'Please enter at least one audio file URL';
+                    urlStatus.style.color = '#f44336';
+                    return;
+                }
+
+                // Parse URLs - support both newline and comma separation
+                const urlLines = urlText.split(/\n|,/)
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0);
+                
+                if (urlLines.length === 0) {
+                    urlStatus.textContent = 'No valid URLs found';
+                    urlStatus.style.color = '#f44336';
+                    return;
+                }
+
+                // Validate all URLs
+                const validUrls = [];
+                const invalidUrls = [];
+                
+                for (const urlText of urlLines) {
+                    try {
+                        new URL(urlText);
+                        validUrls.push(urlText);
+                    } catch (e) {
+                        invalidUrls.push(urlText);
+                    }
+                }
+
+                if (validUrls.length === 0) {
+                    urlStatus.textContent = '✗ No valid URLs found. Please check the format.';
+                    urlStatus.style.color = '#f44336';
+                    return;
+                }
+
+                if (invalidUrls.length > 0) {
+                    urlStatus.textContent = `⚠ ${invalidUrls.length} invalid URL(s) skipped. ${validUrls.length} valid URL(s) ready.`;
+                    urlStatus.style.color = '#ff9800';
+                } else {
+                    urlStatus.textContent = `✓ ${validUrls.length} URL(s) ready! Click on canvas to place each source.`;
+                    urlStatus.style.color = '#4CAF50';
+                }
+
+                // Store URLs for placement (actual fetch happens on canvas click)
+                window.audioHover.pendingAudioUrls = validUrls;
+                window.audioHover.sourcePlacementMode = true;
+                window.audioHover.canvas.style.cursor = 'crosshair';
+                
+                console.log(`✓ ${validUrls.length} URL(s) validated and ready for placement`);
+            });
+
+            // Dropbox handlers (if they exist)
+            const loadDropboxBtn = document.getElementById('loadDropboxBtn');
+            if (loadDropboxBtn) {
+                loadDropboxBtn.addEventListener('click', () => {
+                    const dropboxSection = document.getElementById('dropboxSection');
+                    const urlSection = document.getElementById('urlSection');
+                    if (dropboxSection) {
+                        dropboxSection.style.display = dropboxSection.style.display === 'none' ? 'block' : 'none';
+                        if (urlSection) urlSection.style.display = 'none';
+                    }
+                });
+            }
+
+            const closeDropboxBtn = document.getElementById('closeDropboxBtn');
+            if (closeDropboxBtn) {
+                closeDropboxBtn.addEventListener('click', () => {
+                    const dropboxSection = document.getElementById('dropboxSection');
+                    if (dropboxSection) {
+                        dropboxSection.style.display = 'none';
+                        document.getElementById('dropboxLinks').value = '';
+                        document.getElementById('dropboxStatus').textContent = '';
+                    }
+                });
+            }
+
+            const loadDropboxFilesBtn = document.getElementById('loadDropboxFilesBtn');
+            if (loadDropboxFilesBtn) {
+                loadDropboxFilesBtn.addEventListener('click', () => {
+                    window.audioHover.loadFromDropbox();
+                });
+            }
+        });
+    </script>
+</body>
+</html>

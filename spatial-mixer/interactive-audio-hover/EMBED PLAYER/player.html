@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Interactive Audio Hover Experience - Embedded Player">
+    <title>Interactive Audio Experience</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        /* Full screen canvas */
+        #audioCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            cursor: crosshair;
+            display: block;
+            z-index: 1;
+        }
+
+        /* Minimal loading indicator */
+        .loading-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .loading-indicator.visible {
+            opacity: 1;
+        }
+
+        .loading-indicator.hidden {
+            opacity: 0;
+            display: none;
+        }
+
+        /* Volume Control Panel */
+        .control-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(20, 20, 20, 0.9);
+            border-radius: 12px;
+            padding: 20px;
+            z-index: 100;
+            min-width: 280px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: rgba(255, 255, 255, 0.9);
+            max-height: 80vh;
+            overflow-y: auto;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .control-panel.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(20px);
+        }
+
+        .control-panel-header {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .control-label-text {
+            font-weight: 500;
+        }
+
+        .control-value {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .volume-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease;
+        }
+
+        .volume-slider::-moz-range-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        .tracks-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .track-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .track-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .track-name {
+            flex: 1;
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 12px;
+        }
+
+        .track-mute-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.7);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .track-mute-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .track-mute-btn.muted {
+            background: rgba(255, 80, 80, 0.3);
+            border-color: rgba(255, 80, 80, 0.5);
+            color: rgba(255, 150, 150, 0.9);
+        }
+
+        .track-mute-btn.muted:hover {
+            background: rgba(255, 80, 80, 0.4);
+        }
+
+        .toggle-panel-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(20, 20, 20, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            z-index: 101;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .toggle-panel-btn:hover {
+            background: rgba(30, 30, 30, 0.95);
+            transform: scale(1.05);
+        }
+
+        .control-panel:not(.hidden) ~ .toggle-panel-btn {
+            bottom: auto;
+            right: auto;
+            top: 20px;
+            right: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .control-panel {
+                bottom: 10px;
+                right: 10px;
+                left: 10px;
+                min-width: auto;
+                max-width: none;
+            }
+
+            .toggle-panel-btn {
+                bottom: 10px;
+                right: 10px;
+            }
+
+            .control-panel:not(.hidden) ~ .toggle-panel-btn {
+                top: 10px;
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="audioCanvas"></canvas>
+    <div class="loading-indicator" id="loadingIndicator">Loading audio experience...</div>
+    
+    <!-- Volume Control Panel -->
+    <div class="control-panel hidden" id="controlPanel">
+        <div class="control-panel-header">Audio Controls</div>
+        
+        <!-- Master Volume Control -->
+        <div class="control-group">
+            <div class="control-label">
+                <span class="control-label-text">Master Volume</span>
+                <span class="control-value" id="masterVolumeValue">100%</span>
+            </div>
+            <input type="range" class="volume-slider" id="masterVolumeSlider" min="0" max="100" value="100">
+        </div>
+        
+        <!-- Track Mute Controls -->
+        <div class="control-group">
+            <div class="control-label">
+                <span class="control-label-text">Tracks</span>
+            </div>
+            <div class="tracks-list" id="tracksList">
+                <!-- Tracks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toggle Panel Button -->
+    <button class="toggle-panel-btn" id="togglePanelBtn" title="Toggle Controls">⚙️</button>
+
+    <script src="interactive-audio-hover.js"></script>
+    <script>
+        // Helper function to get base URL (directory of current file)
+        function getBaseUrl() {
+            const path = window.location.pathname;
+            const lastSlash = path.lastIndexOf('/');
+            if (lastSlash === -1) {
+                return window.location.origin + '/';
+            }
+            return window.location.origin + path.substring(0, lastSlash + 1);
+        }
+
+        // Convert simple array format to full config format
+        function convertSimpleArrayToConfig(simpleArray) {
+            const canvasWidth = window.innerWidth;
+            const canvasHeight = window.innerHeight;
+            const centerX = canvasWidth / 2;
+            const centerY = canvasHeight / 2;
+            const radius = Math.min(canvasWidth, canvasHeight) * 0.3;
+            
+            const sources = simpleArray.map((item, index) => {
+                const angle = (index / simpleArray.length) * Math.PI * 2;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                
+                return {
+                    id: Date.now() + index,
+                    name: item.title || item.name || `Track ${index + 1}`,
+                    editableTitle: item.title || item.name || `Track ${index + 1}`,
+                    color: item.color || null,
+                    audioUrl: item.url,
+                    x: x,
+                    y: y,
+                    baseX: x,
+                    baseY: y,
+                    vx: 0,
+                    vy: 0,
+                    currentVolume: 0,
+                    targetVolume: 0,
+                    isPlaying: false,
+                    driftAngle: Math.random() * Math.PI * 2,
+                    driftSpeed: 0.5 + Math.random() * 0.5,
+                    orbitalAngle: Math.random() * Math.PI * 2,
+                    orbitalRadius: 120 + Math.random() * 80,
+                    orbitalSpeed: 0.015 + Math.random() * 0.01,
+                    orbitalDirection: Math.random() > 0.5 ? 1 : -1
+                };
+            });
+            
+            return {
+                version: '1.0',
+                sources: sources,
+                settings: {
+                    masterVolume: 1.0,
+                    fadeRadius: 500,
+                    fadeSpeed: 0.5,
+                    physicsEnabled: true,
+                    physicsStrength: 1.0,
+                    driftStrength: 1.0,
+                    mouseRepulsion: 1.0,
+                    sourceRepulsion: 1.0,
+                    orbitalStrength: 1.0,
+                    orbitalSpeed: 0.1,
+                    spatialAudioEnabled: true,
+                    spatialAudioStrength: 1.0,
+                    reverbEnabled: true,
+                    reverbAmount: 0.3
+                }
+            };
+        }
+
+        async function loadConfigFromUrl(url) {
+            try {
+                console.log('🔍 Loading config from:', url);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                let config = await response.json();
+                console.log('✓ Config JSON parsed successfully');
+                
+                // Check if it's a simple array format
+                if (Array.isArray(config) && config.length > 0 && config[0].url) {
+                    console.log('🔄 Detected simple array format, converting...');
+                    config = convertSimpleArrayToConfig(config);
+                }
+                
+                return config;
+            } catch (error) {
+                console.error('❌ Error loading config from URL:', error);
+                throw error;
+            }
+        }
+
+        async function loadConfiguration(config) {
+            try {
+                console.log('🔧 Initializing audio hover system...');
+
+                // Initialize audio hover
+                window.audioHover = new InteractiveAudioHover();
+                console.log('✓ InteractiveAudioHover instance created');
+                
+                // Initialize audio context and canvas
+                await window.audioHover.init();
+                console.log('✓ Audio context and canvas initialized');
+                
+                // Ensure canvas is visible and ready
+                const canvas = document.getElementById('audioCanvas');
+                if (canvas && window.audioHover.canvas) {
+                    console.log('✓ Canvas element found and initialized');
+                    // Ensure background is transparent
+                    window.audioHover.backgroundColor = 'transparent';
+                    window.audioHover.backgroundTransparent = true;
+                    // Force initial draw
+                    window.audioHover.draw();
+                    console.log('✓ Canvas drawn with transparent background');
+                }
+                
+                // Set default volume for embedded player (100%)
+                window.audioHover.masterVolume = 1.0;
+                if (window.audioHover.masterGainNode) {
+                    window.audioHover.masterGainNode.gain.value = 1.0;
+                }
+                
+                // Force enable physics
+                window.audioHover.physicsEnabled = true;
+                window.audioHover.physicsStrength = 1.0;
+                window.audioHover.orbitalStrength = 1.0;
+                window.audioHover.driftStrength = 1.0;
+                
+                // Import configuration
+                console.log('📥 Importing configuration...');
+                await window.audioHover.importConfiguration(config, null);
+                console.log(`✓ Configuration imported. Sources loaded: ${window.audioHover.sources.length}`);
+                
+                // Hide loading indicator immediately after sources are loaded
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                if (loadingIndicator && window.audioHover.sources.length > 0) {
+                    loadingIndicator.classList.remove('visible');
+                    setTimeout(() => {
+                        loadingIndicator.classList.add('hidden');
+                    }, 300);
+                    console.log('✓ Loading indicator hidden');
+                }
+                
+                // Force a redraw after import
+                if (window.audioHover.sources.length > 0) {
+                    window.audioHover.draw();
+                    console.log('✓ Canvas redrawn with sources');
+                }
+                
+                // Apply default volume (100%) after import
+                window.audioHover.masterVolume = 1.0;
+                if (window.audioHover.masterGainNode) {
+                    window.audioHover.masterGainNode.gain.value = 1.0;
+                }
+                
+                // Reduce reverb amount to prevent distortion
+                if (window.audioHover.reverbAmount > 0.3) {
+                    window.audioHover.reverbAmount = 0.3;
+                }
+                
+                if (window.audioHover.reverbSendGain) {
+                    window.audioHover.reverbSendGain.gain.value = window.audioHover.reverbAmount * 0.25;
+                }
+                
+                // Ensure physics are enabled
+                if (!window.audioHover.physicsEnabled) {
+                    window.audioHover.physicsEnabled = true;
+                }
+                if (window.audioHover.physicsStrength === 0) {
+                    window.audioHover.physicsStrength = 1.0;
+                }
+                
+                // Ensure animation loop is running
+                if (window.audioHover.animationFrameId === null) {
+                    window.audioHover.startAnimationLoop();
+                }
+                
+                console.log('✓ Configuration loaded successfully');
+                return true;
+            } catch (error) {
+                console.error('Error loading configuration:', error);
+                throw error;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            // Show loading indicator
+            loadingIndicator.classList.add('visible');
+            
+            // Determine config URL
+            const urlParams = new URLSearchParams(window.location.search);
+            let configUrl = urlParams.get('config');
+            
+            // If no config parameter, use default config.json
+            if (!configUrl) {
+                const baseUrl = getBaseUrl();
+                configUrl = baseUrl + 'config.json';
+            } else if (!configUrl.startsWith('http://') && !configUrl.startsWith('https://')) {
+                // Relative path - construct full URL
+                const baseUrl = getBaseUrl();
+                configUrl = baseUrl + configUrl;
+            }
+            
+            console.log('🎯 Loading config from:', configUrl);
+            
+            try {
+                // Load config
+                const config = await loadConfigFromUrl(configUrl);
+                
+                // Load configuration into player
+                await loadConfiguration(config);
+                
+                // Initialize volume controls after sources are loaded
+                if (window.audioHover && window.audioHover.sources.length > 0) {
+                    initializeVolumeControls();
+                    updateTracksList();
+                }
+                
+                // Attempt auto-play immediately (may require user interaction due to browser policies)
+                if (window.audioHover && window.audioHover.sources.length > 0) {
+                    console.log(`✓ ${window.audioHover.sources.length} sources ready for playback`);
+                    
+                    // Try to resume and play immediately
+                    const attemptAutoPlay = async () => {
+                        try {
+                            // Resume audio context if suspended
+                            if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                                try {
+                                    await window.audioHover.audioContext.resume();
+                                    console.log('✓ Audio context resumed');
+                                } catch (resumeError) {
+                                    console.warn('⚠️ Could not resume audio context (will resume on interaction):', resumeError);
+                                }
+                            }
+                            
+                            // Start playback if context is running
+                            if (window.audioHover.audioContext && window.audioHover.audioContext.state === 'running') {
+                                window.audioHover.playAll();
+                                console.log('✓ Auto-play started');
+                            } else {
+                                console.log('⏸️ Audio context suspended - will start on user interaction');
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ Auto-play failed:', error);
+                        }
+                    };
+                    
+                    // Try immediately
+                    attemptAutoPlay();
+                    
+                    // Also try after a short delay (sometimes helps)
+                    setTimeout(attemptAutoPlay, 100);
+                } else {
+                    console.warn('⚠️ No sources loaded - cannot auto-play');
+                }
+                
+                // Resume audio context and start playback on any user interaction (for autoplay policy)
+                const resumeOnInteraction = async () => {
+                    if (window.audioHover && window.audioHover.audioContext && window.audioHover.audioContext.state === 'suspended') {
+                        try {
+                            await window.audioHover.audioContext.resume();
+                            console.log('✓ Audio context resumed on user interaction');
+                            if (!window.audioHover.isPlaying) {
+                                window.audioHover.playAll();
+                                console.log('✓ Playback started on user interaction');
+                            }
+                        } catch (resumeError) {
+                            console.warn('⚠️ Could not resume audio context:', resumeError);
+                        }
+                    }
+                };
+                
+                // Listen for user interactions (but don't limit to once - allow multiple attempts)
+                document.addEventListener('click', resumeOnInteraction);
+                document.addEventListener('touchstart', resumeOnInteraction);
+                document.addEventListener('keydown', resumeOnInteraction);
+                document.addEventListener('mousemove', resumeOnInteraction, { once: true }); // Also try on first mouse move
+                
+            } catch (error) {
+                console.error('❌ Failed to load configuration:', error);
+                loadingIndicator.textContent = 'Failed to load audio experience';
+                loadingIndicator.style.color = '#f44336';
+                // Keep loading indicator visible to show error
+            }
+        });
+
+        // Initialize mute functionality for sources
+        function initializeMuteFunctionality() {
+            if (!window.audioHover) return;
+            
+            // Add mute methods to InteractiveAudioHover prototype
+            if (!window.audioHover.muteSource) {
+                window.audioHover.muteSource = function(sourceId) {
+                    const source = this.sources.find(s => s.id === sourceId);
+                    if (!source) return;
+                    
+                    // Initialize isMuted if not exists
+                    if (source.isMuted === undefined) {
+                        source.isMuted = false;
+                    }
+                    
+                    source.isMuted = true;
+                    
+                    // Immediately set volume to 0
+                    if (source.gainNode) {
+                        const currentTime = this.audioContext.currentTime;
+                        source.gainNode.gain.cancelScheduledValues(currentTime);
+                        source.gainNode.gain.setValueAtTime(source.gainNode.gain.value, currentTime);
+                        source.gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.1);
+                    }
+                    
+                    console.log(`🔇 Muted track: ${source.name || source.editableTitle}`);
+                };
+            }
+            
+            if (!window.audioHover.unmuteSource) {
+                window.audioHover.unmuteSource = function(sourceId) {
+                    const source = this.sources.find(s => s.id === sourceId);
+                    if (!source || !source.isMuted) return;
+                    
+                    source.isMuted = false;
+                    
+                    // Volume will be restored by the updateAudioVolumes loop based on proximity
+                    // No need to manually restore - the animation loop will handle it
+                    
+                    console.log(`🔊 Unmuted track: ${source.name || source.editableTitle}`);
+                };
+            }
+            
+            if (!window.audioHover.toggleMuteSource) {
+                window.audioHover.toggleMuteSource = function(sourceId) {
+                    const source = this.sources.find(s => s.id === sourceId);
+                    if (!source) return;
+                    
+                    if (source.isMuted) {
+                        this.unmuteSource(sourceId);
+                    } else {
+                        this.muteSource(sourceId);
+                    }
+                };
+            }
+            
+            // Override updateAudioVolumes to respect mute state
+            const originalUpdateAudioVolumes = window.audioHover.updateAudioVolumes;
+            if (originalUpdateAudioVolumes) {
+                window.audioHover.updateAudioVolumes = function() {
+                    // Call original update
+                    originalUpdateAudioVolumes.call(this);
+                    
+                    // Apply mute state to all sources after volume calculation
+                    this.sources.forEach(source => {
+                        if (source.isMuted && source.gainNode) {
+                            const currentTime = this.audioContext.currentTime;
+                            const currentGain = source.gainNode.gain.value;
+                            // Force volume to 0 if muted
+                            source.gainNode.gain.cancelScheduledValues(currentTime);
+                            source.gainNode.gain.setValueAtTime(currentGain, currentTime);
+                            source.gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.1);
+                        }
+                    });
+                };
+            }
+        }
+
+        // Initialize volume controls
+        function initializeVolumeControls() {
+            const controlPanel = document.getElementById('controlPanel');
+            const toggleBtn = document.getElementById('togglePanelBtn');
+            const masterVolumeSlider = document.getElementById('masterVolumeSlider');
+            const masterVolumeValue = document.getElementById('masterVolumeValue');
+            
+            // Toggle panel visibility
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => {
+                    controlPanel.classList.toggle('hidden');
+                });
+            }
+            
+            // Master volume control
+            if (masterVolumeSlider && window.audioHover) {
+                // Set initial value
+                masterVolumeSlider.value = window.audioHover.masterVolume * 100;
+                masterVolumeValue.textContent = Math.round(window.audioHover.masterVolume * 100) + '%';
+                
+                masterVolumeSlider.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value) / 100;
+                    window.audioHover.masterVolume = value;
+                    if (window.audioHover.masterGainNode) {
+                        window.audioHover.masterGainNode.gain.value = value;
+                    }
+                    masterVolumeValue.textContent = e.target.value + '%';
+                });
+            }
+            
+            // Initialize mute functionality
+            initializeMuteFunctionality();
+        }
+
+        // Update tracks list in control panel
+        function updateTracksList() {
+            const tracksList = document.getElementById('tracksList');
+            if (!tracksList || !window.audioHover) return;
+            
+            tracksList.innerHTML = '';
+            
+            window.audioHover.sources.forEach(source => {
+                // Initialize isMuted if not exists
+                if (source.isMuted === undefined) {
+                    source.isMuted = false;
+                }
+                
+                const trackItem = document.createElement('div');
+                trackItem.className = 'track-item';
+                
+                const colorDot = document.createElement('div');
+                colorDot.className = 'track-color';
+                colorDot.style.backgroundColor = source.color || '#ffffff';
+                
+                const trackName = document.createElement('div');
+                trackName.className = 'track-name';
+                trackName.textContent = source.editableTitle || source.name || 'Untitled Track';
+                
+                const muteBtn = document.createElement('button');
+                muteBtn.className = 'track-mute-btn' + (source.isMuted ? ' muted' : '');
+                muteBtn.textContent = source.isMuted ? 'Unmute' : 'Mute';
+                muteBtn.addEventListener('click', () => {
+                    window.audioHover.toggleMuteSource(source.id);
+                    // Update button state after toggle
+                    const isNowMuted = source.isMuted;
+                    muteBtn.textContent = isNowMuted ? 'Unmute' : 'Mute';
+                    if (isNowMuted) {
+                        muteBtn.classList.add('muted');
+                    } else {
+                        muteBtn.classList.remove('muted');
+                    }
+                });
+                
+                trackItem.appendChild(colorDot);
+                trackItem.appendChild(trackName);
+                trackItem.appendChild(muteBtn);
+                tracksList.appendChild(trackItem);
+            });
+        }
+        
+        // Re-update tracks list when sources change (polling approach for simplicity)
+        setInterval(() => {
+            if (window.audioHover && document.getElementById('tracksList')) {
+                const currentCount = document.querySelectorAll('.track-item').length;
+                if (currentCount !== window.audioHover.sources.length) {
+                    updateTracksList();
+                }
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

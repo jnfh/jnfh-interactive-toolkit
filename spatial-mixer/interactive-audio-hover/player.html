@@ -342,7 +342,7 @@
     <button class="toggle-panel-btn" id="togglePanelBtn" title="Toggle Controls">⚙️</button>
     
     <!-- Timeline Container -->
-    <div id="timeline-container"></div>
+    <div id="timeline-container" style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000; min-height: 80px; background: rgba(20, 20, 20, 0.95);"></div>
 
     <link rel="stylesheet" href="../../css/universal-timeline.css">
     <script src="../../js/universal-timeline.js"></script>
@@ -586,17 +586,29 @@
                 try {
                     window.timeline = new UniversalTimeline();
                     const container = document.getElementById('timeline-container');
+                    console.log('Timeline container element:', container);
                     if (container) {
                         window.timeline.createUI('timeline-container');
                         console.log('✓ Timeline initialized');
+                        // Force visibility check
+                        const timelineEl = container.querySelector('.universal-timeline');
+                        if (timelineEl) {
+                            console.log('Timeline element created:', timelineEl);
+                            console.log('Timeline computed style:', window.getComputedStyle(timelineEl).display);
+                        } else {
+                            console.error('Timeline inner HTML not created');
+                        }
                     } else {
-                        console.error('Timeline container not found');
+                        console.error('Timeline container not found - checking DOM...');
+                        console.log('Available elements:', document.querySelectorAll('[id*="timeline"]'));
                     }
                 } catch (error) {
                     console.error('Error initializing timeline:', error);
+                    console.error('Error stack:', error.stack);
                 }
             } else {
-                console.error('UniversalTimeline not loaded');
+                console.error('UniversalTimeline not loaded - check script path');
+                console.log('Available globals:', Object.keys(window).filter(k => k.toLowerCase().includes('time')));
             }
             
             const loadingIndicator = document.getElementById('loadingIndicator');
