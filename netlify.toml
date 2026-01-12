@@ -13,6 +13,11 @@
   to = "/spatial-mixer/"
   status = 301
 
+[[redirects]]
+  from = "/av-sync-player"
+  to = "/av-sync-player/"
+  status = 301
+
 # Headers for better performance
 [[headers]]
   for = "/*"
