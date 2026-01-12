@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "video": {
+    "url": "https://pub-a83442f019fb41e1be094dd351388a65.r2.dev/Jokulvatn%20(10th%20Anniversary%20Edition)/video/Jokulvatn-base-4k-hq.mp4",
+    "name": "Jokulvatn Base Video",
+    "preload": "metadata",
+    "duration": 2760
+  },
+  "videoLayers": [],
+  "audio": [
+    {
+      "name": "LEFT FRONT",
+      "url": "https://pub-a83442f019fb41e1be094dd351388a65.r2.dev/Jokulvatn%20(10th%20Anniversary%20Edition)/audio/Jokulvatn_2026_(LEFT%20%20FRONT).opus",
+      "volume": 1.0,
+      "pan": 0,
+      "muted": false,
+      "duration": 2760
+    },
+    {
+      "name": "RIGHT FRONT",
+      "url": "https://pub-a83442f019fb41e1be094dd351388a65.r2.dev/Jokulvatn%20(10th%20Anniversary%20Edition)/audio/Jokulvatn_2026_(RIGHT%20FRONT).opus",
+      "volume": 1.0,
+      "pan": 0,
+      "muted": false,
+      "duration": 2760
+    },
+    {
+      "name": "RIGHT SURROUND",
+      "url": "https://pub-a83442f019fb41e1be094dd351388a65.r2.dev/Jokulvatn%20(10th%20Anniversary%20Edition)/audio/Jokulvatn_2026_(RIGhT%20SURROUND).opus",
+      "volume": 1.0,
+      "pan": 0,
+      "muted": false,
+      "duration": 2760
+    },
+    {
+      "name": "LEFT SURROUND",
+      "url": "https://pub-a83442f019fb41e1be094dd351388a65.r2.dev/Jokulvatn%20(10th%20Anniversary%20Edition)/audio/Jokulvatn_2026_(LEFT%20SURROUND).opus",
+      "volume": 1.0,
+      "pan": 0,
+      "muted": false,
+      "duration": 2760
+    }
+  ],
+  "settings": {
+    "masterVolume": 1.0
+  },
+  "annotations": []
+}
+

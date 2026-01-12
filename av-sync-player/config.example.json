@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "video": {
+    "url": "https://your-r2-bucket.r2.cloudflarestorage.com/base-video.mp4",
+    "name": "Base Video",
+    "preload": "metadata",
+    "duration": 120.5
+  },
+  "videoLayers": [
+    {
+      "name": "Overlay Layer 1",
+      "url": "https://your-r2-bucket.r2.cloudflarestorage.com/overlay-1.webm",
+      "preload": "metadata",
+      "opacity": 1.0,
+      "x": 0,
+      "y": 0,
+      "scaleX": 1.0,
+      "scaleY": 1.0,
+      "zIndex": 1,
+      "visible": true,
+      "offset": 0,
+      "duration": 120.5
+    },
+    {
+      "name": "Overlay Layer 2",
+      "url": "path/to/another-overlay.webm",
+      "opacity": 0.8,
+      "x": 100,
+      "y": 100,
+      "scaleX": 0.5,
+      "scaleY": 0.5,
+      "zIndex": 2,
+      "visible": true,
+      "offset": 10,
+      "duration": 110.5
+    }
+  ],
+  "audio": [
+    {
+      "name": "Audio Track 1",
+      "url": "https://your-r2-bucket.r2.cloudflarestorage.com/audio1.flac",
+      "volume": 1.0,
+      "pan": 0,
+      "muted": false,
+      "duration": 120.5
+    },
+    {
+      "name": "Audio Track 2",
+      "url": "path/to/audio2.flac",
+      "volume": 0.8,
+      "pan": -0.5,
+      "muted": false,
+      "duration": 120.5
+    },
+    {
+      "name": "Audio Track 3",
+      "url": "path/to/audio3.flac",
+      "volume": 0.9,
+      "pan": 0.5,
+      "muted": false,
+      "duration": 120.5
+    },
+    {
+      "name": "Audio Track 4",
+      "url": "path/to/audio4.flac",
+      "volume": 0.7,
+      "pan": 0,
+      "muted": false,
+      "duration": 120.5
+    }
+  ],
+  "settings": {
+    "masterVolume": 1.0
+  }
+}
+

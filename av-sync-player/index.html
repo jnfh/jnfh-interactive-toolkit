@@ -1,0 +1,2759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AV Spatial Mixer - Synchronized Audio/Video Player</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.8);
+            --accent-green: #4CAF50;
+            --accent-blue: #2196F3;
+            --accent-red: #f44336;
+            --accent-orange: #FF9800;
+            --shadow: 0 8px 32px rgba(0,0,0,0.3);
+            --bg-dark: #1a1a1a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Video Container */
+        .video-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+        }
+
+        #videoElement {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            position: relative;
+        }
+
+        /* Video Compositor Display */
+        #videoCompositorDisplay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: 1;
+        }
+
+        /* Spatial Canvas Overlay */
+        #spatialCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: auto;
+            cursor: crosshair;
+            z-index: 10;
+        }
+
+        /* Position Readout Panel */
+        .position-readout {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.9);
+            z-index: 20;
+            max-width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            pointer-events: none;
+        }
+
+        .position-readout h4 {
+            margin: 0 0 8px 0;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 4px;
+        }
+
+        .position-readout-item {
+            margin: 4px 0;
+            padding: 2px 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .position-readout-label {
+            color: rgba(255, 255, 255, 0.7);
+            min-width: 60px;
+        }
+
+        /* Annotation Tooltip */
+        .annotation-tooltip {
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.95);
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+
+        /* Annotation List Item */
+        .annotation-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .annotation-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .annotation-item-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .annotation-item-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+        }
+
+        .annotation-item-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .annotation-item-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .annotation-item-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .annotation-item-btn.delete {
+            color: var(--accent-red);
+        }
+
+        .annotation-item-content {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Annotation Form Modal */
+        .annotation-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .annotation-modal.active {
+            display: flex;
+        }
+
+        .annotation-modal-content {
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            pointer-events: auto;
+            position: relative;
+        }
+        
+        .annotation-modal-content * {
+            pointer-events: auto;
+        }
+
+        .annotation-modal h3 {
+            margin-bottom: 20px;
+        }
+
+        .annotation-form-group {
+            margin-bottom: 15px;
+        }
+
+        .annotation-form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .annotation-form-group input,
+        .annotation-form-group textarea,
+        .annotation-form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+        
+        .annotation-form-group input[type="color"] {
+            height: 40px;
+            padding: 2px;
+            cursor: pointer;
+        }
+
+        .annotation-form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .annotation-form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .position-readout-value {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+            text-align: right;
+        }
+
+        .position-readout-section {
+            margin-bottom: 10px;
+        }
+
+        .position-readout-section:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Minimal Timeline Overlay */
+        .minimal-timeline {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 600px;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .minimal-timeline.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .minimal-timeline:hover {
+            opacity: 1;
+        }
+
+        #minimalTimelineSlider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            margin-bottom: 5px;
+        }
+
+        #minimalTimelineSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        }
+
+        #minimalTimelineSlider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        }
+
+        .minimal-time-display {
+            text-align: center;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-panel.hidden {
+            display: none;
+        }
+
+        /* Timeline */
+        .timeline-container {
+            width: 100%;
+            position: relative;
+        }
+
+        .timeline-label {
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #timeline {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            position: relative;
+        }
+
+        #timeline::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+        }
+
+        #timeline::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        #timeline::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        }
+
+        /* Transport Controls */
+        .transport-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-play {
+            font-size: 1.2rem;
+            padding: 15px 30px;
+        }
+
+        /* Volume and Mixing Controls */
+        .audio-controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .audio-control-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .audio-control-item h4 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .control-row label {
+            font-size: 0.85rem;
+            min-width: 60px;
+            opacity: 0.8;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            border: none;
+        }
+
+        .control-value {
+            font-size: 0.8rem;
+            min-width: 45px;
+            text-align: right;
+            opacity: 0.7;
+        }
+
+        /* Master Volume */
+        .master-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .master-volume {
+            flex: 1;
+            max-width: 300px;
+        }
+
+        /* Settings Panel */
+        .settings-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 50px;
+            padding: 12px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        .settings-toggle:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: -450px;
+            width: 450px;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--glass-border);
+            box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+            z-index: 999;
+            overflow-y: auto;
+            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 20px;
+        }
+
+        .settings-panel.open {
+            right: 0;
+        }
+
+        .settings-panel h2 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        /* File Loader */
+        .file-loader {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .file-loader h3 {
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .file-input-group {
+            margin-bottom: 15px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: var(--accent-blue);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-label:hover {
+            background: #0b7dda;
+            transform: translateY(-2px);
+        }
+
+        /* Status Messages */
+        .status-message {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .status-message.success {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid rgba(76, 175, 80, 0.5);
+            color: var(--accent-green);
+            display: block;
+        }
+
+        .status-message.error {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            color: var(--accent-red);
+            display: block;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .loading-progress {
+            width: 300px;
+            max-width: 80%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .loading-progress-bar {
+            height: 100%;
+            background: var(--accent-blue);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .settings-panel {
+                width: 100vw;
+                right: -100vw;
+            }
+
+            .audio-controls-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div id="loadingText">Loading media files...</div>
+        <div class="loading-progress">
+            <div class="loading-progress-bar" id="loadingProgressBar"></div>
+        </div>
+    </div>
+
+    <!-- Settings Toggle -->
+    <button class="settings-toggle" id="settingsToggle">
+        <span>⚙️</span>
+        <span>Settings</span>
+    </button>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+        <h2>⚙️ Settings</h2>
+        
+        <div class="file-loader">
+            <h3>Load Media Files</h3>
+            
+            <div class="file-input-group">
+                <label for="videoFile" class="file-label">📹 Select Base Video (MP4)</label>
+                <input type="file" id="videoFile" accept="video/mp4,video/webm">
+            </div>
+            
+            <div class="file-input-group">
+                <label for="videoLayers" class="file-label">🎬 Select Video Layers (WebM with Alpha)</label>
+                <input type="file" id="videoLayers" accept="video/webm,video/mp4" multiple>
+                <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 5px;">
+                    Select multiple transparent video files (WebM recommended for transparency)
+                </p>
+            </div>
+            
+            <div class="file-input-group">
+                <label for="imageOverlays" class="file-label">🖼️ Select PNG Overlays</label>
+                <input type="file" id="imageOverlays" accept="image/png" multiple>
+                <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 5px;">
+                    Select PNG images to overlay at specific times (simpler than text annotations)
+                </p>
+            </div>
+            
+            <div class="file-input-group">
+                <label for="audioFiles" class="file-label">🎵 Select Audio Files (4+)</label>
+                <input type="file" id="audioFiles" accept="audio/*" multiple>
+            </div>
+            
+            <div class="file-input-group">
+                <label for="configFile" class="file-label">📄 Load Config File</label>
+                <input type="file" id="configFile" accept=".json">
+            </div>
+            
+            <div class="status-message" id="fileStatus"></div>
+        </div>
+
+        <div class="file-loader">
+            <h3>Export Configuration</h3>
+            <button class="btn btn-secondary" id="exportConfigBtn">💾 Export Config</button>
+            <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 10px;">
+                Saves current media file paths and settings to JSON
+            </p>
+        </div>
+
+        <!-- Physics Controls -->
+        <div class="file-loader" style="text-align: left;">
+            <h3>⚙️ Physics & Movement</h3>
+            
+            <div class="control-row" style="margin-bottom: 15px;">
+                <label style="min-width: 150px;">Physics Enabled:</label>
+                <input type="checkbox" id="physicsEnabled" style="width: 20px; height: 20px;">
+            </div>
+
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Physics Strength:</label>
+                <input type="range" id="physicsStrength" min="0" max="100" value="0" style="flex: 1;">
+                <span class="control-value" id="physicsStrengthValue">0%</span>
+            </div>
+
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Drift Strength:</label>
+                <input type="range" id="driftStrength" min="0" max="100" value="0" style="flex: 1;">
+                <span class="control-value" id="driftStrengthValue">0%</span>
+            </div>
+
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Mouse Repulsion:</label>
+                <input type="range" id="mouseRepulsion" min="0" max="100" value="0" style="flex: 1;">
+                <span class="control-value" id="mouseRepulsionValue">0%</span>
+            </div>
+
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Source Repulsion:</label>
+                <input type="range" id="sourceRepulsion" min="0" max="100" value="0" style="flex: 1;">
+                <span class="control-value" id="sourceRepulsionValue">0%</span>
+            </div>
+
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Orbital Strength:</label>
+                <input type="range" id="orbitalStrength" min="0" max="100" value="0" style="flex: 1;">
+                <span class="control-value" id="orbitalStrengthValue">0%</span>
+            </div>
+
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Orbital Speed:</label>
+                <input type="range" id="orbitalSpeed" min="0" max="100" value="0" style="flex: 1;">
+                <span class="control-value" id="orbitalSpeedValue">0%</span>
+            </div>
+        </div>
+
+        <!-- Spatial Audio Controls -->
+        <div class="file-loader" style="text-align: left;">
+            <h3>🎵 Spatial Audio</h3>
+            
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Fade Radius:</label>
+                <input type="range" id="fadeRadius" min="0" max="100" value="50" style="flex: 1;">
+                <span class="control-value" id="fadeRadiusValue">50%</span>
+            </div>
+
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Spatial Strength:</label>
+                <input type="range" id="spatialAudioStrength" min="0" max="100" value="100" style="flex: 1;">
+                <span class="control-value" id="spatialAudioStrengthValue">100%</span>
+            </div>
+
+            <div class="control-row" style="margin-bottom: 15px;">
+                <label style="min-width: 150px;">Reverb Enabled:</label>
+                <input type="checkbox" id="reverbEnabled" checked style="width: 20px; height: 20px;">
+            </div>
+
+            <div class="control-row" style="margin-bottom: 10px;">
+                <label style="min-width: 150px;">Reverb Amount:</label>
+                <input type="range" id="reverbAmount" min="0" max="100" value="100" style="flex: 1;">
+                <span class="control-value" id="reverbAmountValue">100%</span>
+            </div>
+        </div>
+
+        <!-- Display Options -->
+        <div class="file-loader" style="text-align: left;">
+            <h3>🎨 Display Options</h3>
+            
+            <div class="control-row" style="margin-bottom: 15px;">
+                <label style="min-width: 150px;">Show Audio Sources:</label>
+                <input type="checkbox" id="showAudioSources" checked style="width: 20px; height: 20px;">
+            </div>
+
+            <div class="control-row" style="margin-bottom: 15px;">
+                <label style="min-width: 150px;">Show Control Panel:</label>
+                <input type="checkbox" id="showControlPanel" style="width: 20px; height: 20px;">
+            </div>
+        </div>
+
+        <!-- Timeline Annotations -->
+        <div class="file-loader" style="text-align: left;">
+            <h3>📝 Timeline Annotations</h3>
+            
+            <div style="margin-bottom: 15px;">
+                <button class="btn btn-primary" id="addAnnotationBtn" style="width: 100%; margin-bottom: 10px;">+ Add Annotation</button>
+                <div id="annotationsList" style="max-height: 300px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <!-- Image Overlays -->
+        <div class="file-loader" style="text-align: left;">
+            <h3>🖼️ Image Overlays</h3>
+            
+            <div style="margin-bottom: 15px;">
+                <button class="btn btn-primary" id="addImageOverlayBtn" style="width: 100%; margin-bottom: 10px;">+ Add Image Overlay</button>
+                <div id="imageOverlaysList" style="max-height: 300px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Container -->
+    <div class="video-container">
+        <video id="videoElement" controls preload="metadata" muted style="display: none;"></video>
+        <canvas id="videoCompositorDisplay"></canvas>
+        <canvas id="spatialCanvas"></canvas>
+        
+        <!-- Minimal Timeline Overlay (shown when control panel is hidden) -->
+        <div class="minimal-timeline" id="minimalTimeline">
+            <input type="range" id="minimalTimelineSlider" min="0" max="100" value="0" step="0.01">
+            <div class="minimal-time-display" id="minimalTimeDisplay">0:00 / 0:00</div>
+        </div>
+        
+        <!-- Position Readout Panel -->
+        <div class="position-readout" id="positionReadout">
+            <div class="position-readout-section">
+                <h4>Listener</h4>
+                <div class="position-readout-item">
+                    <span class="position-readout-label">X:</span>
+                    <span class="position-readout-value" id="listenerX">0</span>
+                </div>
+                <div class="position-readout-item">
+                    <span class="position-readout-label">Y:</span>
+                    <span class="position-readout-value" id="listenerY">0</span>
+                </div>
+            </div>
+            <div class="position-readout-section" id="sourcesReadout">
+                <h4>Sources</h4>
+                <div id="sourcesList"></div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel" id="controlPanel">
+            <!-- Timeline -->
+            <div class="timeline-container">
+                <div class="timeline-label">
+                    <span>Timeline</span>
+                    <span id="timeDisplay">0:00 / 0:00</span>
+                </div>
+                <div style="position: relative;">
+                    <input type="range" id="timeline" min="0" max="100" value="0" step="0.01">
+                    <canvas id="timelineMarkersCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                </div>
+            </div>
+
+            <!-- Transport Controls -->
+            <div class="transport-controls">
+                <button class="btn btn-primary btn-play" id="playPauseBtn">▶ Play</button>
+                <button class="btn btn-secondary" id="stopBtn">⏹ Stop</button>
+                <button class="btn btn-secondary" id="restartBtn">⏮ Restart</button>
+                
+                <div class="master-volume">
+                    <div class="control-row">
+                        <label>Master:</label>
+                        <input type="range" id="masterVolume" min="0" max="100" value="100">
+                        <span class="control-value" id="masterVolumeValue">100%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- Image Overlay Modal -->
+    <div class="annotation-modal" id="imageOverlayModal">
+        <div class="annotation-modal-content">
+            <h3 id="imageOverlayModalTitle">Add Image Overlay</h3>
+            <form id="imageOverlayForm">
+                <input type="hidden" id="imageOverlayId" value="">
+                
+                <div class="annotation-form-group">
+                    <label>Image File:</label>
+                    <input type="file" id="imageOverlayFile" accept="image/png,image/jpeg,image/jpg" style="width: 100%;">
+                    <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 5px;">Or use URL below</p>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Image URL:</label>
+                    <input type="text" id="imageOverlayUrl" placeholder="https://your-r2-bucket/image.png">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Name:</label>
+                    <input type="text" id="imageOverlayName" placeholder="e.g., Title Card, Logo">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Time (seconds):</label>
+                    <input type="number" id="imageOverlayTime" step="0.1" min="0" value="0" required>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Duration (seconds, 0 = permanent):</label>
+                    <input type="number" id="imageOverlayDuration" step="0.1" min="0" value="0">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Fade Duration (seconds):</label>
+                    <input type="number" id="imageOverlayFadeDuration" step="0.1" min="0" value="0.5">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Opacity (0-1):</label>
+                    <input type="range" id="imageOverlayOpacity" min="0" max="1" step="0.01" value="1">
+                    <span class="control-value" id="imageOverlayOpacityValue">1</span>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Position Type:</label>
+                    <select id="imageOverlayPositionType">
+                        <option value="center">Center-Relative (pixels)</option>
+                        <option value="absolute">Absolute (0-1, video-relative)</option>
+                    </select>
+                </div>
+
+                <div class="annotation-form-group">
+                    <label>Position X (pixels or 0-1):</label>
+                    <input type="number" id="imageOverlayPosX" step="1" value="0">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Position Y (pixels or 0-1):</label>
+                    <input type="number" id="imageOverlayPosY" step="1" value="0">
+                </div>
+
+                <div class="annotation-form-group">
+                    <label>Anchor X (0-1, 0.5=center):</label>
+                    <input type="number" id="imageOverlayAnchorX" step="0.01" min="0" max="1" value="0.5">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Anchor Y (0-1, 0.5=center):</label>
+                    <input type="number" id="imageOverlayAnchorY" step="0.01" min="0" max="1" value="0.5">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Scale X (1.0 = 100%):</label>
+                    <input type="number" id="imageOverlayScaleX" step="0.01" min="0.01" value="1.0">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Scale Y (1.0 = 100%):</label>
+                    <input type="number" id="imageOverlayScaleY" step="0.01" min="0.01" value="1.0">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Z-Index:</label>
+                    <input type="number" id="imageOverlayZIndex" step="1" value="100">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>
+                        <input type="checkbox" id="imageOverlayVisible" checked>
+                        Visible
+                    </label>
+                </div>
+                
+                <div class="annotation-form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary" id="imageOverlayCancelBtn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Annotation Modal -->
+    <div class="annotation-modal" id="annotationModal">
+        <div class="annotation-modal-content">
+            <h3 id="annotationModalTitle">Add Annotation</h3>
+            <form id="annotationForm">
+                <input type="hidden" id="annotationId" value="">
+                
+                <div class="annotation-form-group">
+                    <label>Time (seconds):</label>
+                    <input type="number" id="annotationTime" step="0.1" min="0" required>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Duration (seconds, 0 = permanent):</label>
+                    <input type="number" id="annotationDuration" step="0.1" min="0" value="0">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Title:</label>
+                    <input type="text" id="annotationTitle" placeholder="Movement I, Section A, etc.">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Text (displayed on canvas):</label>
+                    <textarea id="annotationText" placeholder="Additional information displayed on canvas"></textarea>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Tooltip (shown on hover):</label>
+                    <textarea id="annotationTooltip" placeholder="Detailed information shown when hovering over marker"></textarea>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Style:</label>
+                    <select id="annotationStyle">
+                        <option value="default">Default</option>
+                        <option value="title">Title</option>
+                        <option value="subtitle">Subtitle</option>
+                        <option value="info">Info</option>
+                    </select>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Font Family:</label>
+                    <select id="annotationFontFamily">
+                        <option value="Poppins">Poppins (Default)</option>
+                        <option value="Arial">Arial</option>
+                        <option value="Helvetica">Helvetica</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="Courier New">Courier New</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Impact">Impact</option>
+                        <option value="Comic Sans MS">Comic Sans MS</option>
+                    </select>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Font Size (px, leave empty for auto):</label>
+                    <input type="number" id="annotationFontSize" step="1" min="8" max="72" placeholder="Auto">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Text Color:</label>
+                    <input type="color" id="annotationColor" value="#ffffff">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Background Color:</label>
+                    <input type="color" id="annotationBackgroundColor" value="#000000">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Background Opacity (0-1):</label>
+                    <input type="number" id="annotationBackgroundOpacity" step="0.1" min="0" max="1" value="0.7">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Text Alignment:</label>
+                    <select id="annotationTextAlign">
+                        <option value="center">Center</option>
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                    </select>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Border Radius (px):</label>
+                    <input type="number" id="annotationBorderRadius" step="1" min="0" max="50" value="8">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Padding (px):</label>
+                    <input type="number" id="annotationPadding" step="1" min="0" max="50" value="16">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Position X (0-1, 0.5 = center):</label>
+                    <input type="number" id="annotationPosX" step="0.01" min="0" max="1" value="0.5">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>Position Y (0-1, 0.5 = center):</label>
+                    <input type="number" id="annotationPosY" step="0.01" min="0" max="1" value="0.5">
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>
+                        <input type="checkbox" id="annotationShowOnTimeline" checked>
+                        Show marker on timeline
+                    </label>
+                </div>
+                
+                <div class="annotation-form-group">
+                    <label>
+                        <input type="checkbox" id="annotationVisible" checked>
+                        Visible
+                    </label>
+                </div>
+                
+                <div class="annotation-form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary" id="annotationCancelBtn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="av-sync-player.js"></script>
+    <script>
+        // Initialize the player
+        let syncPlayer = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Ensure loading overlay is hidden on startup
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('hidden');
+            }
+
+            // Initialize player
+            syncPlayer = new AVSyncPlayer();
+            await syncPlayer.init();
+
+            // Setup UI controls
+            setupUIControls();
+            setupFileLoaders();
+        });
+
+        // Function to update minimal timeline visibility and position readout (global scope)
+        function updateMinimalTimeline() {
+            const positionReadout = document.getElementById('positionReadout');
+            const controlPanel = document.getElementById('controlPanel');
+            const minimalTimeline = document.getElementById('minimalTimeline');
+            
+            if (controlPanel && minimalTimeline) {
+                if (controlPanel.classList.contains('hidden')) {
+                    minimalTimeline.classList.add('visible');
+                    // Hide position readout when control panel is hidden
+                    if (positionReadout) {
+                        positionReadout.style.display = 'none';
+                    }
+                } else {
+                    minimalTimeline.classList.remove('visible');
+                    // Show position readout when control panel is visible
+                    if (positionReadout) {
+                        positionReadout.style.display = '';
+                    }
+                }
+            }
+        }
+
+        function setupUIControls() {
+            // Play/Pause
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const restartBtn = document.getElementById('restartBtn');
+            const timeline = document.getElementById('timeline');
+            const masterVolume = document.getElementById('masterVolume');
+            const masterVolumeValue = document.getElementById('masterVolumeValue');
+
+            playPauseBtn.addEventListener('click', () => {
+                if (syncPlayer.isPlaying) {
+                    syncPlayer.pause();
+                    playPauseBtn.textContent = '▶ Play';
+                } else {
+                    syncPlayer.play();
+                    playPauseBtn.textContent = '⏸ Pause';
+                }
+            });
+
+            stopBtn.addEventListener('click', () => {
+                syncPlayer.stop();
+                playPauseBtn.textContent = '▶ Play';
+            });
+
+            restartBtn.addEventListener('click', () => {
+                syncPlayer.restart();
+                playPauseBtn.textContent = '⏸ Pause';
+            });
+
+            // Timeline scrubbing - reliable and smooth
+            let isScrubbing = false;
+            let seekTimeout = null;
+            let lastSeekTime = 0;
+            const SEEK_DEBOUNCE = 33; // ~30fps seeks during scrubbing (33ms)
+            
+            timeline.addEventListener('mousedown', () => { 
+                isScrubbing = true;
+            });
+            timeline.addEventListener('mouseup', () => { 
+                isScrubbing = false;
+                // Clear any pending seek timeout
+                if (seekTimeout) {
+                    clearTimeout(seekTimeout);
+                    seekTimeout = null;
+                }
+            });
+            timeline.addEventListener('mouseleave', () => {
+                if (isScrubbing) {
+                    isScrubbing = false;
+                    if (seekTimeout) {
+                        clearTimeout(seekTimeout);
+                        seekTimeout = null;
+                    }
+                }
+            });
+            timeline.addEventListener('touchstart', () => { 
+                isScrubbing = true;
+            });
+            timeline.addEventListener('touchend', () => { 
+                isScrubbing = false;
+                if (seekTimeout) {
+                    clearTimeout(seekTimeout);
+                    seekTimeout = null;
+                }
+            });
+
+            // Reliable input handler with debouncing
+            timeline.addEventListener('input', (e) => {
+                if (syncPlayer.duration > 0) {
+                    const seekTime = (e.target.value / 100) * syncPlayer.duration;
+                    
+                    // Clear any pending seek
+                    if (seekTimeout) {
+                        clearTimeout(seekTimeout);
+                        seekTimeout = null;
+                    }
+                    
+                    if (isScrubbing) {
+                        // During scrubbing: debounce seeks for smoothness
+                        const now = performance.now();
+                        if (now - lastSeekTime >= SEEK_DEBOUNCE) {
+                            // Seek immediately if enough time has passed
+                            syncPlayer.seek(seekTime);
+                            lastSeekTime = now;
+                        } else {
+                            // Otherwise, schedule a debounced seek
+                            seekTimeout = setTimeout(() => {
+                                syncPlayer.seek(seekTime);
+                                lastSeekTime = performance.now();
+                                seekTimeout = null;
+                            }, SEEK_DEBOUNCE - (now - lastSeekTime));
+                        }
+                    } else {
+                        // Single click: seek immediately
+                        syncPlayer.seek(seekTime);
+                        lastSeekTime = performance.now();
+                    }
+                }
+            });
+
+            // Master volume
+            masterVolume.addEventListener('input', (e) => {
+                const volume = parseFloat(e.target.value) / 100;
+                syncPlayer.setMasterVolume(volume);
+                masterVolumeValue.textContent = Math.round(e.target.value) + '%';
+            });
+
+            // Update timeline and time display (more frequent for smooth scrubbing)
+            let isMinimalScrubbing = false;
+            let minimalSeekTimeout = null;
+            let lastMinimalSeekTime = 0;
+            const minimalTimelineSlider = document.getElementById('minimalTimelineSlider');
+            const minimalTimeDisplay = document.getElementById('minimalTimeDisplay');
+            
+            if (minimalTimelineSlider) {
+                minimalTimelineSlider.addEventListener('mousedown', () => { 
+                    isMinimalScrubbing = true;
+                });
+                minimalTimelineSlider.addEventListener('mouseup', () => { 
+                    isMinimalScrubbing = false;
+                    if (minimalSeekTimeout) {
+                        clearTimeout(minimalSeekTimeout);
+                        minimalSeekTimeout = null;
+                    }
+                });
+                minimalTimelineSlider.addEventListener('mouseleave', () => {
+                    if (isMinimalScrubbing) {
+                        isMinimalScrubbing = false;
+                        if (minimalSeekTimeout) {
+                            clearTimeout(minimalSeekTimeout);
+                            minimalSeekTimeout = null;
+                        }
+                    }
+                });
+                minimalTimelineSlider.addEventListener('touchstart', () => { 
+                    isMinimalScrubbing = true;
+                });
+                minimalTimelineSlider.addEventListener('touchend', () => { 
+                    isMinimalScrubbing = false;
+                    if (minimalSeekTimeout) {
+                        clearTimeout(minimalSeekTimeout);
+                        minimalSeekTimeout = null;
+                    }
+                });
+
+                minimalTimelineSlider.addEventListener('input', (e) => {
+                    if (syncPlayer.duration > 0) {
+                        const seekTime = (e.target.value / 100) * syncPlayer.duration;
+                        
+                        // Clear any pending seek
+                        if (minimalSeekTimeout) {
+                            clearTimeout(minimalSeekTimeout);
+                            minimalSeekTimeout = null;
+                        }
+                        
+                        if (isMinimalScrubbing) {
+                            // During scrubbing: debounce seeks
+                            const now = performance.now();
+                            if (now - lastMinimalSeekTime >= SEEK_DEBOUNCE) {
+                                syncPlayer.seek(seekTime);
+                                lastMinimalSeekTime = now;
+                            } else {
+                                minimalSeekTimeout = setTimeout(() => {
+                                    syncPlayer.seek(seekTime);
+                                    lastMinimalSeekTime = performance.now();
+                                    minimalSeekTimeout = null;
+                                }, SEEK_DEBOUNCE - (now - lastMinimalSeekTime));
+                            }
+                        } else {
+                            // Single click: seek immediately
+                            syncPlayer.seek(seekTime);
+                            lastMinimalSeekTime = performance.now();
+                        }
+                    }
+                });
+            }
+            
+            // Timeline markers canvas
+            const timelineMarkersCanvas = document.getElementById('timelineMarkersCanvas');
+            let timelineMarkersCtx = null;
+            if (timelineMarkersCanvas) {
+                timelineMarkersCtx = timelineMarkersCanvas.getContext('2d');
+                const resizeTimelineCanvas = () => {
+                    const timelineRect = timeline.getBoundingClientRect();
+                    timelineMarkersCanvas.width = timelineRect.width;
+                    timelineMarkersCanvas.height = timelineRect.height;
+                };
+                resizeTimelineCanvas();
+                window.addEventListener('resize', resizeTimelineCanvas);
+            }
+            
+            // Use requestAnimationFrame for smoother timeline updates (60fps)
+            let lastTimelineUpdate = 0;
+            function updateTimelineLoop(timestamp) {
+                // Throttle to ~60fps for smooth updates
+                if (timestamp - lastTimelineUpdate >= 16) {
+                    if (!isScrubbing && syncPlayer.duration > 0) {
+                        const progress = (syncPlayer.currentTime / syncPlayer.duration) * 100;
+                        timeline.value = progress;
+                    }
+                    
+                    // Update minimal timeline
+                    if (minimalTimelineSlider && syncPlayer.duration > 0 && !isMinimalScrubbing) {
+                        const progress = (syncPlayer.currentTime / syncPlayer.duration) * 100;
+                        minimalTimelineSlider.value = progress;
+                    }
+                    
+                    // Draw timeline markers (less frequently to save performance)
+                    if (timelineMarkersCtx && timelineMarkersCanvas && syncPlayer.duration > 0 && (timestamp - lastTimelineUpdate >= 100)) {
+                        timelineMarkersCtx.clearRect(0, 0, timelineMarkersCanvas.width, timelineMarkersCanvas.height);
+                        syncPlayer.annotations.forEach(ann => {
+                            if (!ann.visible || !ann.showOnTimeline) return;
+                            const progress = (ann.time / syncPlayer.duration) * 100;
+                            const x = (progress / 100) * timelineMarkersCanvas.width;
+                            
+                            // Draw marker line
+                            timelineMarkersCtx.strokeStyle = ann.timelineColor || 'rgba(255, 255, 255, 0.8)';
+                            timelineMarkersCtx.lineWidth = 2;
+                            timelineMarkersCtx.beginPath();
+                            timelineMarkersCtx.moveTo(x, 0);
+                            timelineMarkersCtx.lineTo(x, timelineMarkersCanvas.height);
+                            timelineMarkersCtx.stroke();
+                            
+                            // Draw marker dot
+                            timelineMarkersCtx.fillStyle = ann.timelineColor || 'rgba(255, 255, 255, 0.8)';
+                            timelineMarkersCtx.beginPath();
+                            timelineMarkersCtx.arc(x, timelineMarkersCanvas.height / 2, 4, 0, Math.PI * 2);
+                            timelineMarkersCtx.fill();
+                        });
+                    }
+                    
+                    updateTimeDisplay();
+                    
+                    // Update minimal time display
+                    if (minimalTimeDisplay && syncPlayer.duration > 0) {
+                        const current = formatTime(syncPlayer.currentTime);
+                        const total = formatTime(syncPlayer.duration);
+                        minimalTimeDisplay.textContent = `${current} / ${total}`;
+                    }
+                    
+                    lastTimelineUpdate = timestamp;
+                }
+                
+                requestAnimationFrame(updateTimelineLoop);
+            }
+            requestAnimationFrame(updateTimelineLoop);
+
+            // Settings panel toggle
+            const settingsToggle = document.getElementById('settingsToggle');
+            const settingsPanel = document.getElementById('settingsPanel');
+            
+            settingsToggle.addEventListener('click', () => {
+                settingsPanel.classList.toggle('open');
+                settingsToggle.querySelector('span:last-child').textContent = 
+                    settingsPanel.classList.contains('open') ? 'Close' : 'Settings';
+            });
+
+            // Setup physics controls
+            setupPhysicsControls();
+            
+            // Setup annotations
+            setupAnnotations();
+            setupImageOverlays();
+            setupKeyboardShortcuts();
+        }
+        
+        function setupKeyboardShortcuts() {
+            // Prevent shortcuts when typing in inputs/textareas
+            const isInputFocused = () => {
+                const active = document.activeElement;
+                return active && (
+                    active.tagName === 'INPUT' || 
+                    active.tagName === 'TEXTAREA' || 
+                    active.isContentEditable ||
+                    active.closest('.annotation-modal-content') !== null
+                );
+            };
+            
+            document.addEventListener('keydown', (e) => {
+                // Ignore if typing in an input field
+                if (isInputFocused()) {
+                    return;
+                }
+                
+                // Prevent default browser behavior for media keys
+                const handledKeys = [' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'm', 'M', 'f', 'F'];
+                if (handledKeys.includes(e.key)) {
+                    e.preventDefault();
+                }
+                
+                switch(e.key) {
+                    case ' ': // Spacebar - Play/Pause
+                        e.preventDefault();
+                        if (syncPlayer.isPlaying) {
+                            syncPlayer.pause();
+                        } else {
+                            syncPlayer.play();
+                        }
+                        break;
+                        
+                    case 'ArrowLeft': // Seek backward 5 seconds
+                        e.preventDefault();
+                        if (syncPlayer.duration > 0) {
+                            const newTime = Math.max(0, syncPlayer.currentTime - 5);
+                            syncPlayer.seek(newTime);
+                        }
+                        break;
+                        
+                    case 'ArrowRight': // Seek forward 5 seconds
+                        e.preventDefault();
+                        if (syncPlayer.duration > 0) {
+                            const newTime = Math.min(syncPlayer.duration, syncPlayer.currentTime + 5);
+                            syncPlayer.seek(newTime);
+                        }
+                        break;
+                        
+                    case 'ArrowUp': // Volume up
+                        e.preventDefault();
+                        const currentVol = syncPlayer.masterVolume;
+                        const newVol = Math.min(2.0, currentVol + 0.1);
+                        syncPlayer.setMasterVolume(newVol);
+                        // Update UI
+                        const masterVolume = document.getElementById('masterVolume');
+                        const masterVolumeValue = document.getElementById('masterVolumeValue');
+                        if (masterVolume) {
+                            masterVolume.value = newVol * 100;
+                        }
+                        if (masterVolumeValue) {
+                            masterVolumeValue.textContent = Math.round(newVol * 100) + '%';
+                        }
+                        break;
+                        
+                    case 'ArrowDown': // Volume down
+                        e.preventDefault();
+                        const currentVolDown = syncPlayer.masterVolume;
+                        const newVolDown = Math.max(0, currentVolDown - 0.1);
+                        syncPlayer.setMasterVolume(newVolDown);
+                        // Update UI
+                        const masterVolumeDown = document.getElementById('masterVolume');
+                        const masterVolumeValueDown = document.getElementById('masterVolumeValue');
+                        if (masterVolumeDown) {
+                            masterVolumeDown.value = newVolDown * 100;
+                        }
+                        if (masterVolumeValueDown) {
+                            masterVolumeValueDown.textContent = Math.round(newVolDown * 100) + '%';
+                        }
+                        break;
+                        
+                    case 'Home': // Go to start
+                        e.preventDefault();
+                        syncPlayer.seek(0);
+                        break;
+                        
+                    case 'End': // Go to end
+                        e.preventDefault();
+                        if (syncPlayer.duration > 0) {
+                            syncPlayer.seek(syncPlayer.duration);
+                        }
+                        break;
+                        
+                    case 'm':
+                    case 'M': // Mute/Unmute (toggle master volume)
+                        e.preventDefault();
+                        const currentVolMute = syncPlayer.masterVolume;
+                        if (currentVolMute > 0) {
+                            syncPlayer.setMasterVolume(0);
+                            const masterVolumeMute = document.getElementById('masterVolume');
+                            const masterVolumeValueMute = document.getElementById('masterVolumeValue');
+                            if (masterVolumeMute) {
+                                masterVolumeMute.value = 0;
+                            }
+                            if (masterVolumeValueMute) {
+                                masterVolumeValueMute.textContent = '0%';
+                            }
+                        } else {
+                            // Restore to 100% if muted
+                            syncPlayer.setMasterVolume(1.0);
+                            const masterVolumeMute = document.getElementById('masterVolume');
+                            const masterVolumeValueMute = document.getElementById('masterVolumeValue');
+                            if (masterVolumeMute) {
+                                masterVolumeMute.value = 100;
+                            }
+                            if (masterVolumeValueMute) {
+                                masterVolumeValueMute.textContent = '100%';
+                            }
+                        }
+                        break;
+                        
+                    case 'f':
+                    case 'F': // Fullscreen toggle
+                        e.preventDefault();
+                        if (!document.fullscreenElement) {
+                            document.documentElement.requestFullscreen().catch(err => {
+                                console.log('Fullscreen error:', err);
+                            });
+                        } else {
+                            document.exitFullscreen();
+                        }
+                        break;
+                }
+            });
+        }
+        
+        function setupImageOverlays() {
+            const addBtn = document.getElementById('addImageOverlayBtn');
+            const modal = document.getElementById('imageOverlayModal');
+            const form = document.getElementById('imageOverlayForm');
+            const cancelBtn = document.getElementById('imageOverlayCancelBtn');
+            const imageOverlaysList = document.getElementById('imageOverlaysList');
+            
+            // Update list when overlays change
+            function updateImageOverlaysList() {
+                if (!imageOverlaysList) return;
+                imageOverlaysList.innerHTML = '';
+                
+                syncPlayer.imageOverlays.forEach((overlay, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'annotation-list-item';
+                    const durationText = overlay.duration > 0 
+                        ? `${overlay.time}s - ${overlay.time + overlay.duration}s`
+                        : `${overlay.time}s (permanent)`;
+                    item.innerHTML = `
+                        <div class="annotation-item-header">
+                            <span>🖼️ ${overlay.name || `Overlay ${index + 1}`} - ${durationText}</span>
+                            <div>
+                                <button class="annotation-item-btn" onclick="editImageOverlay('${overlay.id}')">Edit</button>
+                                <button class="annotation-item-btn delete" onclick="removeImageOverlay('${overlay.id}')">Remove</button>
+                            </div>
+                        </div>
+                    `;
+                    imageOverlaysList.appendChild(item);
+                });
+            }
+            
+            // Add overlay button
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    openImageOverlayModal();
+                });
+            }
+            
+            // Cancel button
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    closeImageOverlayModal();
+                });
+            }
+            
+            // Form submit
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await saveImageOverlay();
+                });
+            }
+            
+            // Close modal on background click
+            if (modal) {
+                modal.addEventListener('mousedown', (e) => {
+                    if (e.target === modal) {
+                        e.preventDefault();
+                        closeImageOverlayModal();
+                    }
+                });
+                
+                const modalContent = modal.querySelector('.annotation-modal-content');
+                if (modalContent) {
+                    modalContent.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                    });
+                    modalContent.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                }
+            }
+            
+            // Opacity slider update
+            const opacitySlider = document.getElementById('imageOverlayOpacity');
+            const opacityValue = document.getElementById('imageOverlayOpacityValue');
+            if (opacitySlider && opacityValue) {
+                opacitySlider.addEventListener('input', (e) => {
+                    opacityValue.textContent = parseFloat(e.target.value).toFixed(2);
+                });
+            }
+            
+            function openImageOverlayModal(overlayId = null, file = null) {
+                const title = document.getElementById('imageOverlayModalTitle');
+                
+                if (overlayId) {
+                    // Edit mode
+                    const overlay = syncPlayer.imageOverlays.find(o => o.id === overlayId);
+                    if (overlay) {
+                        title.textContent = 'Edit Image Overlay';
+                        document.getElementById('imageOverlayId').value = overlay.id;
+                        document.getElementById('imageOverlayName').value = overlay.name || '';
+                        document.getElementById('imageOverlayUrl').value = overlay.url || '';
+                        document.getElementById('imageOverlayTime').value = overlay.time || 0;
+                        document.getElementById('imageOverlayDuration').value = overlay.duration || 0;
+                        document.getElementById('imageOverlayFadeDuration').value = overlay.fadeDuration || 0.5;
+                        document.getElementById('imageOverlayOpacity').value = overlay.opacity !== undefined ? overlay.opacity : 1.0;
+                        document.getElementById('imageOverlayOpacityValue').textContent = (overlay.opacity !== undefined ? overlay.opacity : 1.0).toFixed(2);
+                        document.getElementById('imageOverlayPositionType').value = overlay.positionType || 'center';
+                        document.getElementById('imageOverlayPosX').value = overlay.x || 0;
+                        document.getElementById('imageOverlayPosY').value = overlay.y || 0;
+                        document.getElementById('imageOverlayAnchorX').value = overlay.anchorX !== undefined ? overlay.anchorX : 0.5;
+                        document.getElementById('imageOverlayAnchorY').value = overlay.anchorY !== undefined ? overlay.anchorY : 0.5;
+                        document.getElementById('imageOverlayScaleX').value = overlay.scaleX !== undefined ? overlay.scaleX : 1.0;
+                        document.getElementById('imageOverlayScaleY').value = overlay.scaleY !== undefined ? overlay.scaleY : 1.0;
+                        document.getElementById('imageOverlayZIndex').value = overlay.zIndex !== undefined ? overlay.zIndex : 100;
+                        document.getElementById('imageOverlayVisible').checked = overlay.visible !== false;
+                        document.getElementById('imageOverlayFile').value = ''; // Clear file input
+                    }
+                } else {
+                    // Add mode
+                    title.textContent = 'Add Image Overlay';
+                    form.reset();
+                    document.getElementById('imageOverlayId').value = '';
+                    document.getElementById('imageOverlayTime').value = syncPlayer.currentTime || 0;
+                    document.getElementById('imageOverlayDuration').value = 0;
+                    document.getElementById('imageOverlayFadeDuration').value = 0.5;
+                    document.getElementById('imageOverlayOpacity').value = 1.0;
+                    document.getElementById('imageOverlayOpacityValue').textContent = '1';
+                    document.getElementById('imageOverlayPositionType').value = 'center';
+                    document.getElementById('imageOverlayPosX').value = 0;
+                    document.getElementById('imageOverlayPosY').value = 0;
+                    document.getElementById('imageOverlayAnchorX').value = 0.5;
+                    document.getElementById('imageOverlayAnchorY').value = 0.5;
+                    document.getElementById('imageOverlayScaleX').value = 1.0;
+                    document.getElementById('imageOverlayScaleY').value = 1.0;
+                    document.getElementById('imageOverlayZIndex').value = 100;
+                    document.getElementById('imageOverlayVisible').checked = true;
+                    
+                    // If file provided, set it
+                    if (file) {
+                        document.getElementById('imageOverlayFile').files = [file];
+                        document.getElementById('imageOverlayName').value = file.name.replace(/\.[^/.]+$/, '');
+                    }
+                }
+                
+                modal.classList.add('active');
+            }
+            
+            function closeImageOverlayModal() {
+                modal.classList.remove('active');
+            }
+            
+            async function saveImageOverlay() {
+                const overlayId = document.getElementById('imageOverlayId').value;
+                const fileInput = document.getElementById('imageOverlayFile');
+                const urlInput = document.getElementById('imageOverlayUrl').value.trim();
+                const file = fileInput.files[0];
+                
+                if (!file && !urlInput) {
+                    if (!overlayId) {
+                        alert('Please select an image file or enter a URL');
+                        return;
+                    }
+                }
+                
+                const options = {
+                    name: document.getElementById('imageOverlayName').value || (file ? file.name : 'Image Overlay'),
+                    time: parseFloat(document.getElementById('imageOverlayTime').value) || 0,
+                    duration: parseFloat(document.getElementById('imageOverlayDuration').value) || 0,
+                    fadeDuration: parseFloat(document.getElementById('imageOverlayFadeDuration').value) || 0.5,
+                    opacity: parseFloat(document.getElementById('imageOverlayOpacity').value) || 1.0,
+                    positionType: document.getElementById('imageOverlayPositionType').value || 'center',
+                    x: parseFloat(document.getElementById('imageOverlayPosX').value) || 0,
+                    y: parseFloat(document.getElementById('imageOverlayPosY').value) || 0,
+                    anchorX: parseFloat(document.getElementById('imageOverlayAnchorX').value) || 0.5,
+                    anchorY: parseFloat(document.getElementById('imageOverlayAnchorY').value) || 0.5,
+                    scaleX: parseFloat(document.getElementById('imageOverlayScaleX').value) || 1.0,
+                    scaleY: parseFloat(document.getElementById('imageOverlayScaleY').value) || 1.0,
+                    zIndex: parseInt(document.getElementById('imageOverlayZIndex').value) || 100,
+                    visible: document.getElementById('imageOverlayVisible').checked
+                };
+                
+                if (overlayId) {
+                    // Update existing overlay
+                    const overlay = syncPlayer.imageOverlays.find(o => o.id === overlayId);
+                    if (overlay) {
+                        // Update properties
+                        syncPlayer.updateImageOverlay(overlayId, options);
+                        
+                        // If new file or URL provided, reload image
+                        if (file) {
+                            await syncPlayer.removeImageOverlay(overlayId);
+                            await syncPlayer.addImageOverlay(file, { ...options, id: overlayId });
+                        } else if (urlInput && urlInput !== overlay.url) {
+                            await syncPlayer.removeImageOverlay(overlayId);
+                            await syncPlayer.addImageOverlay(urlInput, { ...options, id: overlayId });
+                        }
+                    }
+                } else {
+                    // Add new overlay
+                    if (file) {
+                        await syncPlayer.addImageOverlay(file, options);
+                    } else if (urlInput) {
+                        await syncPlayer.addImageOverlay(urlInput, options);
+                    }
+                }
+                
+                updateImageOverlaysList();
+                closeImageOverlayModal();
+            }
+            
+            window.editImageOverlay = (id) => {
+                openImageOverlayModal(id);
+            };
+            
+            window.removeImageOverlay = (id) => {
+                if (confirm('Are you sure you want to remove this image overlay?')) {
+                    syncPlayer.removeImageOverlay(id);
+                    updateImageOverlaysList();
+                }
+            };
+            
+            // Initial update
+            updateImageOverlaysList();
+            
+            // Expose functions globally
+            window.openImageOverlayModal = openImageOverlayModal;
+            window.updateImageOverlaysList = updateImageOverlaysList;
+        }
+        
+        function setupAnnotations() {
+            const addBtn = document.getElementById('addAnnotationBtn');
+            const modal = document.getElementById('annotationModal');
+            const form = document.getElementById('annotationForm');
+            const cancelBtn = document.getElementById('annotationCancelBtn');
+            const annotationsList = document.getElementById('annotationsList');
+            
+            // Set up change callback
+            syncPlayer.onAnnotationsChanged = () => {
+                updateAnnotationsList();
+            };
+            
+            // Add annotation button
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    openAnnotationModal();
+                });
+            }
+            
+            // Cancel button
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    closeAnnotationModal();
+                });
+            }
+            
+            // Form submit
+            if (form) {
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    saveAnnotation();
+                });
+            }
+            
+            // Close modal on background click (only if clicking the backdrop, not the content)
+            if (modal) {
+                // Use mousedown instead of click to be more precise
+                modal.addEventListener('mousedown', (e) => {
+                    // Only close if clicking directly on the modal backdrop, not on any child elements
+                    if (e.target === modal) {
+                        e.preventDefault();
+                        closeAnnotationModal();
+                    }
+                });
+                
+                // Prevent clicks inside modal content from closing
+                const modalContent = modal.querySelector('.annotation-modal-content');
+                if (modalContent) {
+                    modalContent.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                    });
+                    modalContent.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                }
+            }
+            
+            function openAnnotationModal(annotationId = null) {
+                const form = document.getElementById('annotationForm');
+                const title = document.getElementById('annotationModalTitle');
+                
+                // Helper function to convert rgba to hex for color input
+                const rgbaToHex = (rgba) => {
+                    if (!rgba) return '#ffffff';
+                    if (rgba.startsWith('#')) return rgba;
+                    const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    if (match) {
+                        const r = parseInt(match[1]).toString(16).padStart(2, '0');
+                        const g = parseInt(match[2]).toString(16).padStart(2, '0');
+                        const b = parseInt(match[3]).toString(16).padStart(2, '0');
+                        return `#${r}${g}${b}`;
+                    }
+                    return '#ffffff';
+                };
+                
+                // Helper function to extract opacity from rgba
+                const extractOpacity = (rgba) => {
+                    if (!rgba) return 0.7;
+                    const match = rgba.match(/rgba\([^)]+,\s*([\d.]+)\)/);
+                    return match ? parseFloat(match[1]) : 0.7;
+                };
+                
+                if (annotationId) {
+                    // Edit mode
+                    const ann = syncPlayer.annotations.find(a => a.id === annotationId);
+                    if (ann) {
+                        title.textContent = 'Edit Annotation';
+                        document.getElementById('annotationId').value = ann.id;
+                        document.getElementById('annotationTime').value = ann.time;
+                        document.getElementById('annotationDuration').value = ann.duration || 0;
+                        document.getElementById('annotationTitle').value = ann.title || '';
+                        document.getElementById('annotationText').value = ann.text || '';
+                        document.getElementById('annotationTooltip').value = ann.tooltip || '';
+                        document.getElementById('annotationStyle').value = ann.style || 'default';
+                        document.getElementById('annotationFontFamily').value = ann.fontFamily || 'Poppins';
+                        document.getElementById('annotationFontSize').value = ann.fontSize || '';
+                        document.getElementById('annotationColor').value = rgbaToHex(ann.color);
+                        document.getElementById('annotationBackgroundColor').value = rgbaToHex(ann.backgroundColor);
+                        document.getElementById('annotationBackgroundOpacity').value = ann.backgroundOpacity !== undefined ? ann.backgroundOpacity : extractOpacity(ann.backgroundColor);
+                        document.getElementById('annotationTextAlign').value = ann.textAlign || 'center';
+                        document.getElementById('annotationBorderRadius').value = ann.borderRadius !== undefined ? ann.borderRadius : 0;
+                        document.getElementById('annotationPadding').value = ann.padding !== undefined ? ann.padding : 0;
+                        document.getElementById('annotationPosX').value = ann.position?.x || 0.5;
+                        document.getElementById('annotationPosY').value = ann.position?.y || 0.5;
+                        document.getElementById('annotationShowOnTimeline').checked = ann.showOnTimeline !== false;
+                        document.getElementById('annotationVisible').checked = ann.visible !== false;
+                    }
+                } else {
+                    // Add mode
+                    title.textContent = 'Add Annotation';
+                    form.reset();
+                    document.getElementById('annotationId').value = '';
+                    document.getElementById('annotationTime').value = syncPlayer.currentTime || 0;
+                    document.getElementById('annotationFontFamily').value = 'Poppins';
+                    document.getElementById('annotationColor').value = '#ffffff';
+                    document.getElementById('annotationBackgroundColor').value = '#000000';
+                    document.getElementById('annotationBackgroundOpacity').value = 0; // Default transparent (no background)
+                    document.getElementById('annotationTextAlign').value = 'center';
+                    document.getElementById('annotationBorderRadius').value = 0; // No border radius (no background)
+                    document.getElementById('annotationPadding').value = 0; // No padding (no background)
+                    document.getElementById('annotationPosX').value = 0.5;
+                    document.getElementById('annotationPosY').value = 0.5;
+                    document.getElementById('annotationShowOnTimeline').checked = true;
+                    document.getElementById('annotationVisible').checked = true;
+                }
+                
+                // Update background opacity when style changes
+                const styleSelect = document.getElementById('annotationStyle');
+                const opacityInput = document.getElementById('annotationBackgroundOpacity');
+                if (styleSelect && opacityInput) {
+                    const updateOpacity = () => {
+                        const style = styleSelect.value;
+                        if (style === 'title' || style === 'subtitle') {
+                            if (opacityInput.value === '0.7' || opacityInput.value === '0') {
+                                opacityInput.value = '0';
+                            }
+                        }
+                    };
+                    styleSelect.addEventListener('change', updateOpacity);
+                    updateOpacity();
+                }
+                
+                modal.classList.add('active');
+            }
+            
+            function closeAnnotationModal() {
+                modal.classList.remove('active');
+                form.reset();
+            }
+            
+            function saveAnnotation() {
+                try {
+                    const id = document.getElementById('annotationId').value;
+                    
+                    // Helper to convert hex to rgba
+                    const hexToRgba = (hex, alpha = 1) => {
+                        if (!hex || !hex.startsWith('#')) return `rgba(255, 255, 255, ${alpha})`;
+                        const r = parseInt(hex.slice(1, 3), 16);
+                        const g = parseInt(hex.slice(3, 5), 16);
+                        const b = parseInt(hex.slice(5, 7), 16);
+                        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                    };
+                    
+                    const timeInput = document.getElementById('annotationTime').value;
+                    if (!timeInput || isNaN(parseFloat(timeInput))) {
+                        alert('Please enter a valid time value');
+                        return;
+                    }
+                    
+                    const fontSizeInput = document.getElementById('annotationFontSize').value;
+                    const style = document.getElementById('annotationStyle').value;
+                    
+                    // Default background opacity: 0 (no background) for all styles
+                    const defaultBackgroundOpacity = 0;
+                    
+                    const annotation = {
+                        time: parseFloat(timeInput),
+                        duration: parseFloat(document.getElementById('annotationDuration').value) || 0,
+                        title: document.getElementById('annotationTitle').value.trim(),
+                        text: document.getElementById('annotationText').value.trim(),
+                        tooltip: document.getElementById('annotationTooltip').value.trim(),
+                        style: style,
+                        fontFamily: document.getElementById('annotationFontFamily').value || 'Poppins',
+                        fontSize: fontSizeInput ? parseInt(fontSizeInput) : null,
+                        color: hexToRgba(document.getElementById('annotationColor').value),
+                        backgroundColor: document.getElementById('annotationBackgroundColor').value,
+                        backgroundOpacity: parseFloat(document.getElementById('annotationBackgroundOpacity').value) || defaultBackgroundOpacity,
+                        textAlign: document.getElementById('annotationTextAlign').value || 'center',
+                        borderRadius: parseInt(document.getElementById('annotationBorderRadius').value) || 0,
+                        padding: parseInt(document.getElementById('annotationPadding').value) || 0,
+                        position: {
+                            x: parseFloat(document.getElementById('annotationPosX').value) || 0.5,
+                            y: parseFloat(document.getElementById('annotationPosY').value) || 0.5
+                        },
+                        showOnTimeline: document.getElementById('annotationShowOnTimeline').checked,
+                        visible: document.getElementById('annotationVisible').checked
+                    };
+                    
+                    if (id) {
+                        // Update existing
+                        syncPlayer.updateAnnotation(id, annotation);
+                    } else {
+                        // Add new
+                        syncPlayer.addAnnotation(annotation);
+                    }
+                    
+                    closeAnnotationModal();
+                } catch (error) {
+                    console.error('Error saving annotation:', error);
+                    alert('Error saving annotation: ' + error.message);
+                }
+            }
+            
+            function updateAnnotationsList() {
+                if (!annotationsList) return;
+                
+                annotationsList.innerHTML = '';
+                
+                if (syncPlayer.annotations.length === 0) {
+                    annotationsList.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No annotations yet. Click "Add Annotation" to create one.</div>';
+                    return;
+                }
+                
+                syncPlayer.annotations.forEach(ann => {
+                    const item = document.createElement('div');
+                    item.className = 'annotation-item';
+                    
+                    const timeStr = formatTime(ann.time);
+                    const durationStr = ann.duration > 0 ? ` (${formatTime(ann.duration)})` : '';
+                    
+                    item.innerHTML = `
+                        <div class="annotation-item-header">
+                            <div>
+                                <div class="annotation-item-title">${ann.title || 'Untitled'}</div>
+                                <div class="annotation-item-time">${timeStr}${durationStr}</div>
+                            </div>
+                            <div class="annotation-item-actions">
+                                <button class="annotation-item-btn" onclick="jumpToAnnotation('${ann.id}')">Jump</button>
+                                <button class="annotation-item-btn" onclick="editAnnotation('${ann.id}')">Edit</button>
+                                <button class="annotation-item-btn delete" onclick="deleteAnnotation('${ann.id}')">Delete</button>
+                            </div>
+                        </div>
+                        ${ann.text ? `<div class="annotation-item-content">${ann.text}</div>` : ''}
+                    `;
+                    
+                    annotationsList.appendChild(item);
+                });
+            }
+            
+            // Global functions for onclick handlers
+            window.editAnnotation = (id) => {
+                openAnnotationModal(id);
+            };
+            
+            window.deleteAnnotation = (id) => {
+                if (confirm('Are you sure you want to delete this annotation?')) {
+                    syncPlayer.removeAnnotation(id);
+                }
+            };
+            
+            window.jumpToAnnotation = (id) => {
+                const ann = syncPlayer.annotations.find(a => a.id === id);
+                if (ann && syncPlayer.duration > 0) {
+                    syncPlayer.seek(ann.time);
+                }
+            };
+            
+            // Initial update
+            updateAnnotationsList();
+        }
+
+        function setupPhysicsControls() {
+            // Physics Enabled
+            const physicsEnabled = document.getElementById('physicsEnabled');
+            if (physicsEnabled) {
+                physicsEnabled.checked = syncPlayer.physicsEnabled;
+                physicsEnabled.addEventListener('change', (e) => {
+                    syncPlayer.physicsEnabled = e.target.checked;
+                });
+            }
+
+            // Physics Strength
+            const physicsStrength = document.getElementById('physicsStrength');
+            const physicsStrengthValue = document.getElementById('physicsStrengthValue');
+            if (physicsStrength) {
+                physicsStrength.value = syncPlayer.physicsStrength * 100;
+                physicsStrength.addEventListener('input', (e) => {
+                    syncPlayer.physicsStrength = parseFloat(e.target.value) / 100;
+                    if (physicsStrengthValue) {
+                        physicsStrengthValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+            }
+
+            // Drift Strength
+            const driftStrength = document.getElementById('driftStrength');
+            const driftStrengthValue = document.getElementById('driftStrengthValue');
+            if (driftStrength) {
+                driftStrength.value = syncPlayer.driftStrength * 100;
+                driftStrength.addEventListener('input', (e) => {
+                    syncPlayer.driftStrength = parseFloat(e.target.value) / 100;
+                    if (driftStrengthValue) {
+                        driftStrengthValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+            }
+
+            // Mouse Repulsion
+            const mouseRepulsion = document.getElementById('mouseRepulsion');
+            const mouseRepulsionValue = document.getElementById('mouseRepulsionValue');
+            if (mouseRepulsion) {
+                mouseRepulsion.value = syncPlayer.mouseRepulsion * 100;
+                mouseRepulsion.addEventListener('input', (e) => {
+                    syncPlayer.mouseRepulsion = parseFloat(e.target.value) / 100;
+                    if (mouseRepulsionValue) {
+                        mouseRepulsionValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+            }
+
+            // Source Repulsion
+            const sourceRepulsion = document.getElementById('sourceRepulsion');
+            const sourceRepulsionValue = document.getElementById('sourceRepulsionValue');
+            if (sourceRepulsion) {
+                sourceRepulsion.value = syncPlayer.sourceRepulsion * 100;
+                sourceRepulsion.addEventListener('input', (e) => {
+                    syncPlayer.sourceRepulsion = parseFloat(e.target.value) / 100;
+                    if (sourceRepulsionValue) {
+                        sourceRepulsionValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+            }
+
+            // Orbital Strength
+            const orbitalStrength = document.getElementById('orbitalStrength');
+            const orbitalStrengthValue = document.getElementById('orbitalStrengthValue');
+            if (orbitalStrength) {
+                orbitalStrength.value = syncPlayer.orbitalStrength * 100;
+                orbitalStrength.addEventListener('input', (e) => {
+                    syncPlayer.orbitalStrength = parseFloat(e.target.value) / 100;
+                    if (orbitalStrengthValue) {
+                        orbitalStrengthValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+            }
+
+            // Orbital Speed
+            const orbitalSpeed = document.getElementById('orbitalSpeed');
+            const orbitalSpeedValue = document.getElementById('orbitalSpeedValue');
+            if (orbitalSpeed) {
+                orbitalSpeed.value = (syncPlayer.orbitalSpeed / 0.1) * 100;
+                orbitalSpeed.addEventListener('input', (e) => {
+                    syncPlayer.orbitalSpeed = (parseFloat(e.target.value) / 100) * 0.1;
+                    if (orbitalSpeedValue) {
+                        orbitalSpeedValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+            }
+
+            // Fade Radius (as percentage of video width)
+            const fadeRadius = document.getElementById('fadeRadius');
+            const fadeRadiusValue = document.getElementById('fadeRadiusValue');
+            if (fadeRadius) {
+                // Initialize slider with current video-relative fade radius (convert 0-1 to 0-100)
+                fadeRadius.value = (syncPlayer.fadeRadiusVideoRelative || 0.5) * 100;
+                fadeRadius.addEventListener('input', (e) => {
+                    // Convert slider value (0-100) to fraction (0-1)
+                    syncPlayer.fadeRadiusVideoRelative = parseFloat(e.target.value) / 100;
+                    if (fadeRadiusValue) {
+                        fadeRadiusValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+                // Update display on init
+                if (fadeRadiusValue) {
+                    fadeRadiusValue.textContent = Math.round(fadeRadius.value) + '%';
+                }
+            }
+
+            // Spatial Audio Strength
+            const spatialAudioStrength = document.getElementById('spatialAudioStrength');
+            const spatialAudioStrengthValue = document.getElementById('spatialAudioStrengthValue');
+            if (spatialAudioStrength) {
+                spatialAudioStrength.value = syncPlayer.spatialAudioStrength * 100;
+                spatialAudioStrength.addEventListener('input', (e) => {
+                    syncPlayer.spatialAudioStrength = parseFloat(e.target.value) / 100;
+                    if (spatialAudioStrengthValue) {
+                        spatialAudioStrengthValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+            }
+
+            // Reverb Enabled
+            const reverbEnabled = document.getElementById('reverbEnabled');
+            if (reverbEnabled) {
+                reverbEnabled.checked = syncPlayer.reverbEnabled;
+                reverbEnabled.addEventListener('change', async (e) => {
+                    syncPlayer.reverbEnabled = e.target.checked;
+                    if (e.target.checked && !syncPlayer.convolverNode) {
+                        await syncPlayer.initReverb();
+                        // Reconnect existing sources with reverb
+                        syncPlayer.audioSources.forEach(source => {
+                            if (source.pannerNode && syncPlayer.reverbSendGain) {
+                                source.pannerNode.disconnect();
+                                source.reverbGain = syncPlayer.audioContext.createGain();
+                                source.reverbGain.gain.value = syncPlayer.reverbAmount * 0.2;
+                                source.pannerNode.connect(source.reverbGain);
+                                source.reverbGain.connect(syncPlayer.reverbSendGain);
+                                
+                                source.dryGain = syncPlayer.audioContext.createGain();
+                                source.dryGain.gain.value = 0.9;
+                                source.pannerNode.connect(source.dryGain);
+                                source.dryGain.connect(syncPlayer.masterGainNode);
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Reverb Amount
+            const reverbAmount = document.getElementById('reverbAmount');
+            const reverbAmountValue = document.getElementById('reverbAmountValue');
+            if (reverbAmount) {
+                reverbAmount.value = syncPlayer.reverbAmount * 100;
+                reverbAmount.addEventListener('input', (e) => {
+                    syncPlayer.reverbAmount = parseFloat(e.target.value) / 100;
+                    if (syncPlayer.reverbSendGain) {
+                        syncPlayer.reverbSendGain.gain.value = syncPlayer.reverbAmount * 0.25;
+                    }
+                    syncPlayer.audioSources.forEach(source => {
+                        if (source.reverbGain) {
+                            source.reverbGain.gain.value = syncPlayer.reverbAmount * 0.2;
+                        }
+                    });
+                    if (reverbAmountValue) {
+                        reverbAmountValue.textContent = Math.round(e.target.value) + '%';
+                    }
+                });
+            }
+
+            // Show Audio Sources toggle
+            const showAudioSources = document.getElementById('showAudioSources');
+            if (showAudioSources) {
+                showAudioSources.checked = syncPlayer.showAudioSources;
+                showAudioSources.addEventListener('change', (e) => {
+                    syncPlayer.showAudioSources = e.target.checked;
+                });
+            }
+
+            // Show Control Panel toggle
+            const showControlPanel = document.getElementById('showControlPanel');
+            const controlPanel = document.getElementById('controlPanel');
+            
+            if (showControlPanel && controlPanel) {
+                showControlPanel.checked = true; // Control panel visible by default
+                showControlPanel.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        controlPanel.classList.remove('hidden');
+                    } else {
+                        controlPanel.classList.add('hidden');
+                    }
+                    updateMinimalTimeline();
+                });
+                
+                // Initial check
+                updateMinimalTimeline();
+            }
+
+        }
+
+        function updateTimeDisplay() {
+            const timeDisplay = document.getElementById('timeDisplay');
+            if (syncPlayer.duration > 0) {
+                const current = formatTime(syncPlayer.currentTime);
+                const total = formatTime(syncPlayer.duration);
+                timeDisplay.textContent = `${current} / ${total}`;
+            } else {
+                timeDisplay.textContent = '0:00 / 0:00';
+            }
+        }
+
+        function formatTime(seconds) {
+            if (!seconds || !isFinite(seconds)) return '0:00';
+            const hours = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            if (hours > 0) {
+                return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function setupFileLoaders() {
+            const videoFile = document.getElementById('videoFile');
+            const audioFiles = document.getElementById('audioFiles');
+            const configFile = document.getElementById('configFile');
+            const exportConfigBtn = document.getElementById('exportConfigBtn');
+            const fileStatus = document.getElementById('fileStatus');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+
+            videoFile.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    loadingOverlay.classList.remove('hidden');
+                    const loadingText = document.getElementById('loadingText');
+                    const loadingProgressBar = document.getElementById('loadingProgressBar');
+                    
+                    try {
+                        if (loadingText) loadingText.textContent = `Loading base video: ${file.name}...`;
+                        if (loadingProgressBar) loadingProgressBar.style.width = '0%';
+                        
+                        await syncPlayer.loadVideo(file);
+                        
+                        if (loadingProgressBar) loadingProgressBar.style.width = '100%';
+                        showStatus(fileStatus, 'success', `Base video loaded: ${file.name} (${formatTime(syncPlayer.duration)})`);
+                    } catch (error) {
+                        showStatus(fileStatus, 'error', `Error loading video: ${error.message}`);
+                    } finally {
+                        setTimeout(() => {
+                            loadingOverlay.classList.add('hidden');
+                            if (loadingProgressBar) loadingProgressBar.style.width = '0%';
+                        }, 300);
+                    }
+                }
+            });
+
+            videoLayers.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+                
+                loadingOverlay.classList.remove('hidden');
+                const loadingText = document.getElementById('loadingText');
+                const loadingProgressBar = document.getElementById('loadingProgressBar');
+                
+                try {
+                    for (let i = 0; i < files.length; i++) {
+                        const file = files[i];
+                        if (loadingText) loadingText.textContent = `Loading video layer ${i + 1}/${files.length}: ${file.name}...`;
+                        if (loadingProgressBar) {
+                            loadingProgressBar.style.width = `${((i + 1) / files.length) * 100}%`;
+                        }
+                        
+                        await syncPlayer.addVideoLayer(file, { zIndex: i + 1 });
+                    }
+                    
+                    if (loadingProgressBar) loadingProgressBar.style.width = '100%';
+                    showStatus(fileStatus, 'success', `${files.length} video layer(s) loaded`);
+                } catch (error) {
+                    showStatus(fileStatus, 'error', `Error loading video layers: ${error.message}`);
+                } finally {
+                    setTimeout(() => {
+                        loadingOverlay.classList.add('hidden');
+                        if (loadingProgressBar) loadingProgressBar.style.width = '0%';
+                    }, 300);
+                }
+            });
+
+            const imageOverlays = document.getElementById('imageOverlays');
+            if (imageOverlays) {
+                imageOverlays.addEventListener('change', async (e) => {
+                    const files = Array.from(e.target.files);
+                    if (files.length === 0) return;
+                    
+                    // Open modal for each file (user can configure settings)
+                    // For now, open modal with first file, user can add more via the + button
+                    if (files.length > 0 && window.openImageOverlayModal) {
+                        window.openImageOverlayModal(null, files[0]);
+                        // Clear the input so same file can be selected again
+                        e.target.value = '';
+                    }
+                });
+            }
+
+            audioFiles.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length < 4) {
+                    showStatus(fileStatus, 'error', 'Please select at least 4 audio files');
+                    return;
+                }
+                
+                loadingOverlay.classList.remove('hidden');
+                const loadingText = document.getElementById('loadingText');
+                const loadingProgressBar = document.getElementById('loadingProgressBar');
+                let totalLoaded = 0;
+                
+                try {
+                    await syncPlayer.loadAudioFiles(files, (index, percent, message, current, total) => {
+                        if (loadingText) {
+                            const fileInfo = total ? `(${current}/${total})` : '';
+                            loadingText.textContent = `${message || 'Loading audio files...'} ${fileInfo} - ${Math.round(percent)}%`;
+                        }
+                        if (loadingProgressBar && total) {
+                            // Calculate overall progress across all files
+                            const overallPercent = ((current - 1) / total) * 100 + (percent / total);
+                            loadingProgressBar.style.width = Math.min(overallPercent, 100) + '%';
+                        } else if (loadingProgressBar) {
+                            loadingProgressBar.style.width = percent + '%';
+                        }
+                    });
+                    
+                    if (loadingProgressBar) loadingProgressBar.style.width = '100%';
+                    showStatus(fileStatus, 'success', `${files.length} audio files loaded`);
+                    
+                    // Ensure canvas is visible and drawn
+                    if (syncPlayer.canvas) {
+                        syncPlayer.drawSpatialCanvas();
+                    }
+                } catch (error) {
+                    showStatus(fileStatus, 'error', `Error loading audio: ${error.message}`);
+                } finally {
+                    setTimeout(() => {
+                        loadingOverlay.classList.add('hidden');
+                        if (loadingProgressBar) loadingProgressBar.style.width = '0%';
+                    }, 300);
+                }
+            });
+
+            configFile.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    loadingOverlay.classList.remove('hidden');
+                    const loadingText = document.getElementById('loadingText');
+                    const loadingProgressBar = document.getElementById('loadingProgressBar');
+                    
+                    try {
+                        if (loadingText) loadingText.textContent = 'Loading configuration...';
+                        if (loadingProgressBar) loadingProgressBar.style.width = '10%';
+                        
+                        const text = await file.text();
+                        const config = JSON.parse(text);
+                        
+                        if (loadingProgressBar) loadingProgressBar.style.width = '30%';
+                        
+                        await syncPlayer.loadConfig(config, (index, percent, message) => {
+                            if (loadingText) {
+                                loadingText.textContent = message || `Loading: ${Math.round(percent)}%`;
+                            }
+                            if (loadingProgressBar) {
+                                // Progress from 30% to 100%
+                                const adjustedPercent = 30 + (percent * 0.7);
+                                loadingProgressBar.style.width = adjustedPercent + '%';
+                            }
+                        });
+                        
+                        if (loadingProgressBar) loadingProgressBar.style.width = '100%';
+                        
+                        // Update UI controls after loading
+                        updateAudioControls();
+                        updateMinimalTimeline();
+                        updateSettingsControls(); // Update all settings controls to reflect loaded config
+                        // Update image overlays list if function exists
+                        if (window.updateImageOverlaysList) {
+                            window.updateImageOverlaysList();
+                        }
+                        
+                        // Update spatial canvas
+                        if (syncPlayer.canvas) {
+                            syncPlayer.drawSpatialCanvas();
+                        }
+                        
+                        showStatus(fileStatus, 'success', 'Configuration loaded successfully');
+                    } catch (error) {
+                        console.error('Config loading error:', error);
+                        showStatus(fileStatus, 'error', `Error loading config: ${error.message}`);
+                        if (loadingText) {
+                            loadingText.textContent = `Error: ${error.message}`;
+                        }
+                    } finally {
+                        setTimeout(() => {
+                            loadingOverlay.classList.add('hidden');
+                            if (loadingProgressBar) loadingProgressBar.style.width = '0%';
+                        }, 300);
+                    }
+                }
+            });
+
+            exportConfigBtn.addEventListener('click', () => {
+                try {
+                    const config = syncPlayer.exportConfig();
+                    
+                    // Validate config before exporting
+                    if (!config.audio || config.audio.length === 0) {
+                        showStatus(fileStatus, 'warning', 'No audio files loaded - config may be incomplete');
+                    }
+                    
+                    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    // Use a descriptive filename with timestamp
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                    a.download = `jokulvatn-config-${timestamp}.json`;
+                    
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showStatus(fileStatus, 'success', 'Configuration exported successfully');
+                } catch (error) {
+                    console.error('Export error:', error);
+                    showStatus(fileStatus, 'error', `Error exporting config: ${error.message}`);
+                }
+            });
+        }
+
+        function updateSettingsControls() {
+            // Update master volume
+            const masterVolume = document.getElementById('masterVolume');
+            const masterVolumeValue = document.getElementById('masterVolumeValue');
+            if (masterVolume && syncPlayer) {
+                masterVolume.value = syncPlayer.masterVolume * 100;
+                if (masterVolumeValue) {
+                    masterVolumeValue.textContent = Math.round(syncPlayer.masterVolume * 100) + '%';
+                }
+            }
+            
+            // Update fade radius
+            const fadeRadius = document.getElementById('fadeRadius');
+            const fadeRadiusValue = document.getElementById('fadeRadiusValue');
+            if (fadeRadius && syncPlayer) {
+                fadeRadius.value = (syncPlayer.fadeRadiusVideoRelative || 0.5) * 100;
+                if (fadeRadiusValue) {
+                    fadeRadiusValue.textContent = Math.round(fadeRadius.value) + '%';
+                }
+            }
+            
+            // Update spatial audio strength
+            const spatialAudioStrength = document.getElementById('spatialAudioStrength');
+            const spatialAudioStrengthValue = document.getElementById('spatialAudioStrengthValue');
+            if (spatialAudioStrength && syncPlayer) {
+                spatialAudioStrength.value = syncPlayer.spatialAudioStrength * 100;
+                if (spatialAudioStrengthValue) {
+                    spatialAudioStrengthValue.textContent = Math.round(spatialAudioStrength.value) + '%';
+                }
+            }
+            
+            // Update physics enabled
+            const physicsEnabled = document.getElementById('physicsEnabled');
+            if (physicsEnabled && syncPlayer) {
+                physicsEnabled.checked = syncPlayer.physicsEnabled;
+            }
+            
+            // Update physics strength
+            const physicsStrength = document.getElementById('physicsStrength');
+            const physicsStrengthValue = document.getElementById('physicsStrengthValue');
+            if (physicsStrength && syncPlayer) {
+                physicsStrength.value = syncPlayer.physicsStrength * 100;
+                if (physicsStrengthValue) {
+                    physicsStrengthValue.textContent = Math.round(physicsStrength.value) + '%';
+                }
+            }
+            
+            // Update drift strength
+            const driftStrength = document.getElementById('driftStrength');
+            const driftStrengthValue = document.getElementById('driftStrengthValue');
+            if (driftStrength && syncPlayer) {
+                driftStrength.value = syncPlayer.driftStrength * 100;
+                if (driftStrengthValue) {
+                    driftStrengthValue.textContent = Math.round(driftStrength.value) + '%';
+                }
+            }
+            
+            // Update mouse repulsion
+            const mouseRepulsion = document.getElementById('mouseRepulsion');
+            const mouseRepulsionValue = document.getElementById('mouseRepulsionValue');
+            if (mouseRepulsion && syncPlayer) {
+                mouseRepulsion.value = syncPlayer.mouseRepulsion * 100;
+                if (mouseRepulsionValue) {
+                    mouseRepulsionValue.textContent = Math.round(mouseRepulsion.value) + '%';
+                }
+            }
+            
+            // Update source repulsion
+            const sourceRepulsion = document.getElementById('sourceRepulsion');
+            const sourceRepulsionValue = document.getElementById('sourceRepulsionValue');
+            if (sourceRepulsion && syncPlayer) {
+                sourceRepulsion.value = syncPlayer.sourceRepulsion * 100;
+                if (sourceRepulsionValue) {
+                    sourceRepulsionValue.textContent = Math.round(sourceRepulsion.value) + '%';
+                }
+            }
+            
+            // Update orbital strength
+            const orbitalStrength = document.getElementById('orbitalStrength');
+            const orbitalStrengthValue = document.getElementById('orbitalStrengthValue');
+            if (orbitalStrength && syncPlayer) {
+                orbitalStrength.value = syncPlayer.orbitalStrength * 100;
+                if (orbitalStrengthValue) {
+                    orbitalStrengthValue.textContent = Math.round(orbitalStrength.value) + '%';
+                }
+            }
+            
+            // Update reverb enabled
+            const reverbEnabled = document.getElementById('reverbEnabled');
+            if (reverbEnabled && syncPlayer) {
+                reverbEnabled.checked = syncPlayer.reverbEnabled;
+            }
+            
+            // Update reverb amount
+            const reverbAmount = document.getElementById('reverbAmount');
+            const reverbAmountValue = document.getElementById('reverbAmountValue');
+            if (reverbAmount && syncPlayer) {
+                reverbAmount.value = syncPlayer.reverbAmount * 100;
+                if (reverbAmountValue) {
+                    reverbAmountValue.textContent = Math.round(reverbAmount.value) + '%';
+                }
+            }
+        }
+
+        function updateAudioControls() {
+            const grid = document.getElementById('audioControlsGrid');
+            if (!grid) return; // Grid doesn't exist, skip update
+            
+            grid.innerHTML = '';
+
+            syncPlayer.audioSources.forEach((source, index) => {
+                const item = document.createElement('div');
+                item.className = 'audio-control-item';
+                item.innerHTML = `
+                    <h4>${source.name || `Audio ${index + 1}`}</h4>
+                    <div class="control-row">
+                        <label>Volume:</label>
+                        <input type="range" class="audio-volume" data-index="${index}" 
+                               min="0" max="100" value="${source.volume * 100}">
+                        <span class="control-value audio-volume-value" data-index="${index}">
+                            ${Math.round(source.volume * 100)}%
+                        </span>
+                    </div>
+                    <div class="control-row">
+                        <label>Pan:</label>
+                        <input type="range" class="audio-pan" data-index="${index}" 
+                               min="-100" max="100" value="${source.pan * 100}">
+                        <span class="control-value audio-pan-value" data-index="${index}">
+                            ${source.pan > 0 ? 'R' : source.pan < 0 ? 'L' : 'C'} ${Math.abs(Math.round(source.pan * 100))}%
+                        </span>
+                    </div>
+                    <div class="control-row">
+                        <label>Solo:</label>
+                        <input type="checkbox" class="audio-solo" data-index="${index}">
+                        <label>Mute:</label>
+                        <input type="checkbox" class="audio-mute" data-index="${index}">
+                    </div>
+                `;
+                grid.appendChild(item);
+            });
+
+            // Attach event listeners
+            document.querySelectorAll('.audio-volume').forEach(slider => {
+                slider.addEventListener('input', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    const volume = parseFloat(e.target.value) / 100;
+                    syncPlayer.setAudioVolume(index, volume);
+                    const valueEl = document.querySelector(`.audio-volume-value[data-index="${index}"]`);
+                    if (valueEl) valueEl.textContent = Math.round(e.target.value) + '%';
+                });
+            });
+
+            document.querySelectorAll('.audio-pan').forEach(slider => {
+                slider.addEventListener('input', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    const pan = parseFloat(e.target.value) / 100;
+                    syncPlayer.setAudioPan(index, pan);
+                    const valueEl = document.querySelector(`.audio-pan-value[data-index="${index}"]`);
+                    if (valueEl) {
+                        valueEl.textContent = pan > 0 ? `R ${Math.abs(Math.round(pan * 100))}%` : 
+                                             pan < 0 ? `L ${Math.abs(Math.round(pan * 100))}%` : 'C 0%';
+                    }
+                });
+            });
+
+            document.querySelectorAll('.audio-solo').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    syncPlayer.setAudioSolo(index, e.target.checked);
+                });
+            });
+
+            document.querySelectorAll('.audio-mute').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    syncPlayer.setAudioMute(index, e.target.checked);
+                });
+            });
+        }
+
+        function showStatus(element, type, message) {
+            element.className = `status-message ${type}`;
+            element.textContent = message;
+            setTimeout(() => {
+                element.className = 'status-message';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+
