@@ -15,8 +15,13 @@
 
 [[redirects]]
   from = "/av-sync-player"
-  to = "/av-sync-player/"
+  to = "/av-sync-player/index.html"
   status = 301
+
+[[redirects]]
+  from = "/av-sync-player/"
+  to = "/av-sync-player/index.html"
+  status = 200
 
 # Headers for better performance
 [[headers]]
