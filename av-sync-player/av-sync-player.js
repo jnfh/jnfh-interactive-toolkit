@@ -18,7 +18,8 @@ class AVSyncPlayer {
         this.masterVolume = 1.5; // Increased overall volume
         this.centerVolumeBoost = 1.5; // Boost volume at center sweet spot (multiplier)
         this._seeking = false;
-        this.fadeDuration = 0.3; // Audio fade in/out duration in seconds
+        this.fadeDuration = 0.5; // Audio fade in/out duration in seconds (matches spatial mixer fadeSpeed)
+        this.fadeSpeed = 0.5; // Fade transition speed in seconds (matches spatial mixer)
         this._fadingIn = false;
         this._fadingOut = false;
         this._fadeEndTime = 0;
@@ -2032,9 +2033,23 @@ class AVSyncPlayer {
             const targetVolume = this.calculateVolumeForSource(source);
             source.targetVolume = targetVolume;
 
-            // Smooth volume transition
+            // Smooth volume transition using fadeSpeed (matches spatial mixer timing)
             const volumeDiff = targetVolume - source.currentVolume;
-            source.currentVolume += volumeDiff * (this.fadeSpeed * 0.1); // Smooth transition
+            const currentTime = this.audioContext.currentTime;
+            
+            // Use linearRampToValueAtTime for smooth transitions matching spatial mixer
+            if (Math.abs(volumeDiff) > 0.001) {
+                source.currentVolume = targetVolume; // Update target immediately
+                if (source.gainNode && !this._fadingIn && !this._fadingOut) {
+                    const currentGain = source.gainNode.gain.value;
+                    source.gainNode.gain.cancelScheduledValues(currentTime);
+                    source.gainNode.gain.setValueAtTime(currentGain, currentTime);
+                    source.gainNode.gain.linearRampToValueAtTime(
+                        targetVolume * this.masterVolume,
+                        currentTime + this.fadeSpeed
+                    );
+                }
+            }
 
             // Apply volume (but respect mute/solo)
             const hasSolo = this.audioSources.some(s => s.solo);
