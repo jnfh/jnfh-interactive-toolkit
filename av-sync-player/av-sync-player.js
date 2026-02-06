@@ -18,8 +18,7 @@ class AVSyncPlayer {
         this.masterVolume = 1.5; // Increased overall volume
         this.centerVolumeBoost = 1.5; // Boost volume at center sweet spot (multiplier)
         this._seeking = false;
-        this.fadeDuration = 0.5; // Audio fade in/out duration in seconds (matches spatial mixer fadeSpeed)
-        this.fadeSpeed = 0.5; // Fade transition speed in seconds (matches spatial mixer)
+        this.fadeDuration = 0.3; // Audio fade in/out duration in seconds
         this._fadingIn = false;
         this._fadingOut = false;
         this._fadeEndTime = 0;
@@ -1603,7 +1602,7 @@ class AVSyncPlayer {
 
     fadeInAudio() {
         const now = this.audioContext.currentTime;
-        const fadeInTime = this.fadeSpeed; // Use fadeSpeed to match spatial mixer timing (0.5s)
+        const fadeInTime = this.fadeDuration;
         
         this._fadingIn = true;
         this._fadingOut = false;
@@ -1637,7 +1636,7 @@ class AVSyncPlayer {
 
     fadeOutAudio(callback) {
         const now = this.audioContext.currentTime;
-        const fadeOutTime = this.fadeSpeed; // Use fadeSpeed to match spatial mixer timing (0.5s)
+        const fadeOutTime = this.fadeDuration;
         
         this._fadingOut = true;
         this._fadingIn = false;
@@ -1655,13 +1654,13 @@ class AVSyncPlayer {
             }
         });
         
-        // Clear fade flag and call callback after fade completes (matches spatial mixer timing)
+        // Clear fade flag and call callback after fade completes
         setTimeout(() => {
             this._fadingOut = false;
             if (callback) {
                 callback();
             }
-        }, fadeOutTime * 1000 + 50); // Add 50ms buffer like spatial mixer
+        }, fadeOutTime * 1000);
     }
 
     stopAllAudio() {
@@ -2035,23 +2034,9 @@ class AVSyncPlayer {
             const targetVolume = this.calculateVolumeForSource(source);
             source.targetVolume = targetVolume;
 
-            // Smooth volume transition using fadeSpeed (matches spatial mixer timing)
+            // Smooth volume transition
             const volumeDiff = targetVolume - source.currentVolume;
-            const currentTime = this.audioContext.currentTime;
-            
-            // Use linearRampToValueAtTime for smooth transitions matching spatial mixer
-            if (Math.abs(volumeDiff) > 0.001) {
-                source.currentVolume = targetVolume; // Update target immediately
-                if (source.gainNode && !this._fadingIn && !this._fadingOut) {
-                    const currentGain = source.gainNode.gain.value;
-                    source.gainNode.gain.cancelScheduledValues(currentTime);
-                    source.gainNode.gain.setValueAtTime(currentGain, currentTime);
-                    source.gainNode.gain.linearRampToValueAtTime(
-                        targetVolume * this.masterVolume,
-                        currentTime + this.fadeSpeed
-                    );
-                }
-            }
+            source.currentVolume += volumeDiff * 0.1; // Smooth transition
 
             // Apply volume (but respect mute/solo)
             const hasSolo = this.audioSources.some(s => s.solo);
@@ -2091,15 +2076,20 @@ class AVSyncPlayer {
                     source.gainNode.gain.value = Math.max(0, Math.min(1, effectiveVolume));
                 }
                 
-                // Update reverb sends if enabled (matches spatial mixer pattern)
+                // Update reverb sends if enabled - increase reverb amount and duration for distant sources
                 if (source.reverbGain && this.reverbEnabled) {
-                    // Match spatial mixer: reverb gain based on distance and reverbAmount
                     const listenerPos = this.getEffectiveListenerPosition();
                     const distance = this.calculateDistance(source.x, source.y, listenerPos.x, listenerPos.y);
                     const normalizedDist = Math.min(distance / this.maxDistance, 1);
-                    // Adjust reverb send level based on distance (more reverb for distant sources)
-                    const reverbGain = this.reverbAmount * 0.2 * (0.3 + normalizedDist * 0.7);
-                    source.reverbGain.gain.value = reverbGain;
+                    
+                    // Increase reverb amount based on distance (more reverb for distant sources)
+                    const baseReverbGain = this.reverbAmount * 0.2;
+                    const distanceReverbMultiplier = 1 + (normalizedDist * 2); // 1x to 3x based on distance
+                    source.reverbGain.gain.value = baseReverbGain * distanceReverbMultiplier;
+                    
+                    // Update convolver buffer for longer reverb tail at distance
+                    // Note: We can't dynamically change convolver buffer during playback easily,
+                    // so we'll increase the reverb send gain instead which effectively increases reverb amount
                 }
                 if (source.dryGain) {
                     source.dryGain.gain.value = 0.9 * source.currentVolume;
