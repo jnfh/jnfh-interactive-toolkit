@@ -1030,9 +1030,11 @@ class AVSyncPlayer {
             this.convolverNode.buffer = impulse;
             this.convolverNode.normalize = true;
             
+            // Create shared reverb send gain node (all sources send to this)
             this.reverbSendGain = this.audioContext.createGain();
-            this.reverbSendGain.gain.value = 0.25;
+            this.reverbSendGain.gain.value = this.reverbAmount * 0.25; // Overall reverb send level (matches spatial mixer)
             
+            // Connect: reverbSendGain -> convolver -> masterGainNode (only once!)
             this.reverbSendGain.connect(this.convolverNode);
             this.convolverNode.connect(this.masterGainNode);
             
@@ -1601,7 +1603,7 @@ class AVSyncPlayer {
 
     fadeInAudio() {
         const now = this.audioContext.currentTime;
-        const fadeInTime = this.fadeDuration;
+        const fadeInTime = this.fadeSpeed; // Use fadeSpeed to match spatial mixer timing (0.5s)
         
         this._fadingIn = true;
         this._fadingOut = false;
@@ -1635,7 +1637,7 @@ class AVSyncPlayer {
 
     fadeOutAudio(callback) {
         const now = this.audioContext.currentTime;
-        const fadeOutTime = this.fadeDuration;
+        const fadeOutTime = this.fadeSpeed; // Use fadeSpeed to match spatial mixer timing (0.5s)
         
         this._fadingOut = true;
         this._fadingIn = false;
@@ -1653,13 +1655,13 @@ class AVSyncPlayer {
             }
         });
         
-        // Clear fade flag and call callback after fade completes
+        // Clear fade flag and call callback after fade completes (matches spatial mixer timing)
         setTimeout(() => {
             this._fadingOut = false;
             if (callback) {
                 callback();
             }
-        }, fadeOutTime * 1000);
+        }, fadeOutTime * 1000 + 50); // Add 50ms buffer like spatial mixer
     }
 
     stopAllAudio() {
@@ -2089,9 +2091,15 @@ class AVSyncPlayer {
                     source.gainNode.gain.value = Math.max(0, Math.min(1, effectiveVolume));
                 }
                 
-                // Update reverb sends if enabled
-                if (source.reverbGain) {
-                    source.reverbGain.gain.value = this.reverbAmount * 0.2 * source.currentVolume;
+                // Update reverb sends if enabled (matches spatial mixer pattern)
+                if (source.reverbGain && this.reverbEnabled) {
+                    // Match spatial mixer: reverb gain based on distance and reverbAmount
+                    const listenerPos = this.getEffectiveListenerPosition();
+                    const distance = this.calculateDistance(source.x, source.y, listenerPos.x, listenerPos.y);
+                    const normalizedDist = Math.min(distance / this.maxDistance, 1);
+                    // Adjust reverb send level based on distance (more reverb for distant sources)
+                    const reverbGain = this.reverbAmount * 0.2 * (0.3 + normalizedDist * 0.7);
+                    source.reverbGain.gain.value = reverbGain;
                 }
                 if (source.dryGain) {
                     source.dryGain.gain.value = 0.9 * source.currentVolume;
