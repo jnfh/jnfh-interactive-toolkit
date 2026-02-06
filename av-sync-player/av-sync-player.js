@@ -1012,7 +1012,8 @@ class AVSyncPlayer {
         
         try {
             const sampleRate = this.audioContext.sampleRate;
-            const length = sampleRate * 2; // 2 seconds
+            // Create longer reverb impulse for more reverb tail (4 seconds base)
+            const length = sampleRate * 4; // 4 seconds base duration (increased from 2 seconds)
             const impulse = this.audioContext.createBuffer(2, length, sampleRate);
             const impulseL = impulse.getChannelData(0);
             const impulseR = impulse.getChannelData(1);
@@ -1029,15 +1030,13 @@ class AVSyncPlayer {
             this.convolverNode.buffer = impulse;
             this.convolverNode.normalize = true;
             
-            // Create shared reverb send gain node (all sources send to this)
             this.reverbSendGain = this.audioContext.createGain();
-            this.reverbSendGain.gain.value = this.reverbAmount * 0.25; // Overall reverb send level (matches spatial mixer)
+            this.reverbSendGain.gain.value = 0.25;
             
-            // Connect: reverbSendGain -> convolver -> masterGainNode (only once!)
             this.reverbSendGain.connect(this.convolverNode);
             this.convolverNode.connect(this.masterGainNode);
             
-            console.log('✓ Reverb initialized');
+            console.log('✓ Reverb initialized with 4 second impulse');
         } catch (error) {
             console.error('Error initializing reverb:', error);
         }
