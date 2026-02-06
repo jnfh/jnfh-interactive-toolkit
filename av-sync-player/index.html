@@ -848,8 +848,8 @@
             
             <div class="control-row" style="margin-bottom: 10px;">
                 <label style="min-width: 150px;">Fade Radius:</label>
-                <input type="range" id="fadeRadius" min="0" max="100" value="50" style="flex: 1;">
-                <span class="control-value" id="fadeRadiusValue">50%</span>
+                <input type="range" id="fadeRadius" min="0" max="300" value="150" style="flex: 1;">
+                <span class="control-value" id="fadeRadiusValue">150%</span>
             </div>
 
             <div class="control-row" style="margin-bottom: 10px;">
@@ -2229,10 +2229,10 @@
             const fadeRadius = document.getElementById('fadeRadius');
             const fadeRadiusValue = document.getElementById('fadeRadiusValue');
             if (fadeRadius) {
-                // Initialize slider with current video-relative fade radius (convert 0-1 to 0-100)
-                fadeRadius.value = (syncPlayer.fadeRadiusVideoRelative || 0.5) * 100;
+                // Initialize slider with current video-relative fade radius (convert 0-3.0 to 0-300)
+                fadeRadius.value = (syncPlayer.fadeRadiusVideoRelative || 1.5) * 100;
                 fadeRadius.addEventListener('input', (e) => {
-                    // Convert slider value (0-100) to fraction (0-1)
+                    // Convert slider value (0-300) to fraction (0-3.0)
                     syncPlayer.fadeRadiusVideoRelative = parseFloat(e.target.value) / 100;
                     if (fadeRadiusValue) {
                         fadeRadiusValue.textContent = Math.round(e.target.value) + '%';
@@ -2584,7 +2584,7 @@
             const fadeRadius = document.getElementById('fadeRadius');
             const fadeRadiusValue = document.getElementById('fadeRadiusValue');
             if (fadeRadius && syncPlayer) {
-                fadeRadius.value = (syncPlayer.fadeRadiusVideoRelative || 0.5) * 100;
+                fadeRadius.value = (syncPlayer.fadeRadiusVideoRelative || 1.5) * 100;
                 if (fadeRadiusValue) {
                     fadeRadiusValue.textContent = Math.round(fadeRadius.value) + '%';
                 }

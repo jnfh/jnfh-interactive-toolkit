@@ -33,7 +33,7 @@ class AVSyncPlayer {
         // Spatial audio settings
         this.mousePos = { x: 0, y: 0 }; // Will be initialized to center in initSpatialCanvas
         this.fadeRadius = 1000; // Base fade radius in pixels (will be scaled to video display area)
-        this.fadeRadiusVideoRelative = 0.5; // Fade radius as fraction of video width (0.5 = 50% of video width)
+        this.fadeRadiusVideoRelative = 1.5; // Fade radius as fraction of video width (1.5 = 150% of video width - much longer fade)
         this.fadeSpeed = 0.5;
         this.spatialAudioEnabled = true;
         this.spatialAudioStrength = 1.0;
