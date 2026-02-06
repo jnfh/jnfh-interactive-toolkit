@@ -773,8 +773,11 @@
             </div>
             
             <div class="file-input-group">
-                <label for="audioFiles" class="file-label">🎵 Select Audio Files (4+)</label>
+                <label for="audioFiles" class="file-label">🎵 Select Audio Files (Minimum 2)</label>
                 <input type="file" id="audioFiles" accept="audio/*" multiple>
+                <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 5px; color: #FF9800;">
+                    ⚠️ Minimum 2 audio files required for playback
+                </p>
             </div>
             
             <div class="file-input-group">
@@ -2437,8 +2440,8 @@
 
             audioFiles.addEventListener('change', async (e) => {
                 const files = Array.from(e.target.files);
-                if (files.length < 4) {
-                    showStatus(fileStatus, 'error', 'Please select at least 4 audio files');
+                if (files.length < 2) {
+                    showStatus(fileStatus, 'error', 'Please select at least 2 audio files');
                     return;
                 }
                 

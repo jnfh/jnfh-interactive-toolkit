@@ -1360,6 +1360,12 @@ class AVSyncPlayer {
         if (this.isPlaying) {
             return;
         }
+        
+        // Require minimum of 2 audio files
+        if (!this.audioSources || this.audioSources.length < 2) {
+            alert(`Please add at least 2 audio files. Currently loaded: ${this.audioSources ? this.audioSources.length : 0}`);
+            return;
+        }
 
         // Resume audio context if suspended (required for autoplay)
         if (this.audioContext.state === 'suspended') {
