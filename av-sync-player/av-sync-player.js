@@ -759,10 +759,9 @@ class AVSyncPlayer {
                         this.videoHeight = this.videoElement.videoHeight;
                         
                         // Calculate fade radius as fraction of video width for consistent scaling
-                        // Default: 1000px relative to a typical 1920px video = ~0.52
-                        // But we'll use 0.5 (50% of video width) for a cleaner value
+                        // Default: 1.5 (150% of video width) for much longer fade dropoff
                         if (this.fadeRadiusVideoRelative === undefined) {
-                            this.fadeRadiusVideoRelative = 0.5; // 50% of video width
+                            this.fadeRadiusVideoRelative = 1.5; // 150% of video width - much longer fade
                         }
                         
                         // Update video display area
